@@ -1,73 +1,152 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
+import MonthCalendar from '../components/MonthCalendar.jsx';
+import { addDays, formatLong, fromYMD, relative, todayYMD } from '../utils/dates.js';
 
-// Today as 'YYYY-MM-DD' (the format <input type="date"> uses)
-const today = () => new Date().toISOString().slice(0, 10);
+const emptyForm = () => ({ title: '', deadline: addDays(todayYMD(), 7), hours: 3, priority: 'medium' });
 
 export default function CalendarPage() {
-  // State = data that can change. When it changes, React re-draws the page.
   const [tasks, setTasks] = useState([]);
-  const [title, setTitle] = useState('');
-  const [deadline, setDeadline] = useState(today());
-  const [hours, setHours] = useState(3);
+  const [form, setForm] = useState(emptyForm);
+  const [month, setMonth] = useState(() => new Date()); // which month the calendar shows
+  const [selected, setSelected] = useState(todayYMD()); // which day is clicked
 
-  // NEW in step 2: load the tasks from the server when the page opens
+  // Load tasks once
   useEffect(() => {
     api('/tasks').then(setTasks).catch(console.error);
   }, []);
 
+  // ---- Task actions ----
   const addTask = async (e) => {
-    e.preventDefault(); // don't reload the page
-    if (!title.trim()) return;
-    // NEW: send the task to the server; it answers with the saved task (incl. id)
-    const task = await api('/tasks', { method: 'POST', body: { title, deadline, hours } });
-    setTasks([...tasks, task]); // new array = React notices the change
-    setTitle('');
+    e.preventDefault();
+    if (!form.title.trim()) return;
+    const task = await api('/tasks', { method: 'POST', body: form });
+    setTasks((prev) => [...prev, task]);
+    setForm(emptyForm());
+  };
+
+  const updateTask = async (id, changes) => {
+    const updated = await api(`/tasks/${id}`, { method: 'PATCH', body: changes });
+    setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
   };
 
   const removeTask = async (id) => {
     await api(`/tasks/${id}`, { method: 'DELETE' });
-    setTasks(tasks.filter((t) => t.id !== id));
+    setTasks((prev) => prev.filter((t) => t.id !== id));
   };
 
+  const showDay = (ymd) => {
+    setMonth(fromYMD(ymd));
+    setSelected(ymd);
+  };
+
+  // ---- Turn tasks into calendar events: { 'YYYY-MM-DD': [event, ...] } ----
+  const events = useMemo(() => {
+    const ev = {};
+    for (const t of tasks) {
+      (ev[t.deadline] ||= []).push({
+        key: `d-${t.id}`, kind: 'deadline', label: t.title, color: t.color, done: t.done, task: t,
+      });
+    }
+    return ev;
+  }, [tasks]);
+
+  // ---- Stats ----
+  const open = tasks.filter((t) => !t.done);
+  const totalHours = open.reduce((s, t) => s + t.hours, 0);
+  const nextDeadline = [...open].sort((a, b) => a.deadline.localeCompare(b.deadline))[0];
+  const sortedTasks = [...tasks].sort(
+    (a, b) => Number(a.done) - Number(b.done) || a.deadline.localeCompare(b.deadline)
+  );
+  const dayEvents = events[selected] || [];
+
   return (
-    <div className="simple-page">
-      <h2>AI Calendar</h2>
-      <p className="hint">Step 2: tasks are saved on the server. Refresh — they stay!</p>
+    <div className="cal-page">
+      {/* ---------- Left column ---------- */}
+      <section className="cal-side">
+        <h2>AI Calendar</h2>
+        <p className="hint">Step 3: every deadline appears on the calendar.</p>
 
-      <form className="card form" onSubmit={addTask}>
-        <input
-          placeholder="What do you need to do?"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <div className="row">
-          <label>
-            Deadline
-            <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
-          </label>
-          <label>
-            Hours
-            <input type="number" min="0.5" step="0.5" value={hours}
-              onChange={(e) => setHours(e.target.value)} />
-          </label>
+        <form className="card form" onSubmit={addTask}>
+          <input
+            placeholder="What do you need to do?"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+          />
+          <div className="row">
+            <label>
+              Deadline
+              <input type="date" value={form.deadline}
+                onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
+            </label>
+            <label>
+              Hours
+              <input type="number" min="0.5" step="0.5" value={form.hours}
+                onChange={(e) => setForm({ ...form, hours: e.target.value })} />
+            </label>
+            <label>
+              Priority
+              <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+          </div>
+          <button type="submit">+ Add task</button>
+        </form>
+
+        <div className="stats">
+          <div><b>{open.length}</b><span>open tasks</span></div>
+          <div><b>{totalHours}h</b><span>work left</span></div>
+          <div><b>{tasks.length - open.length}</b><span>done</span></div>
         </div>
-        <button type="submit">+ Add task</button>
-      </form>
+        {nextDeadline && (
+          <p className="hint">Next deadline: <b>{nextDeadline.title}</b> {relative(nextDeadline.deadline)}</p>
+        )}
 
-      <h3>Tasks ({tasks.length})</h3>
-      {!tasks.length && <p className="hint">No tasks yet.</p>}
-      <ul className="task-list">
-        {tasks.map((t) => (
-          <li key={t.id}>
-            <div className="task-info">
-              <div className="task-title">{t.title}</div>
-              <div className="task-meta">{t.hours}h · due {t.deadline}</div>
+        <h3>Tasks</h3>
+        {!tasks.length && <p className="hint">No tasks yet.</p>}
+        <ul className="task-list">
+          {sortedTasks.map((t) => (
+            <li key={t.id} className={t.done ? 'done' : ''}>
+              <input type="checkbox" checked={t.done} onChange={() => updateTask(t.id, { done: !t.done })} />
+              <i className="dot" style={{ background: t.color }} />
+              <div className="task-info" onClick={() => showDay(t.deadline)}>
+                <div className="task-title">{t.title}</div>
+                <div className="task-meta">
+                  {t.hours}h · due {t.deadline} ({relative(t.deadline)})
+                  <span className={`badge ${t.priority}`}>{t.priority}</span>
+                </div>
+              </div>
+              <button className="small" onClick={() => removeTask(t.id)}>✕</button>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {/* ---------- Right column ---------- */}
+      <section className="cal-main">
+        <MonthCalendar
+          month={month}
+          onMonthChange={setMonth}
+          events={events}
+          selected={selected}
+          onSelect={setSelected}
+        />
+
+        <div className="card day-details">
+          <h3>{formatLong(selected)}</h3>
+          {!dayEvents.length && <p className="hint">No deadlines this day.</p>}
+          {dayEvents.map((e) => (
+            <div key={e.key} className="day-item">
+              <i className="dot" style={{ background: e.color }} />
+              <span><b>🏁 Deadline:</b> {e.label} {e.done && '✅'}</span>
             </div>
-            <button className="small" onClick={() => removeTask(t.id)}>✕</button>
-          </li>
-        ))}
-      </ul>
+          ))}
+          <p className="hint">Next step: plan <i>when</i> to work on each task, so it's not all left for the last day.</p>
+        </div>
+      </section>
     </div>
   );
 }

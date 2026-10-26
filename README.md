@@ -7,8 +7,8 @@ We build two apps **step by step, with our own hands**: a 🗺️ **3D Map** and
 |---|---|---|
 | [0 · Your first React app](https://github.com/amirreza98/App-dev-course/tree/main#readme) | `main` | ~30 min |
 | [1 · React basics](https://github.com/amirreza98/App-dev-course/tree/step-1-react#readme) | `step-1-react` | ~60 min |
-| [2 · Backend](https://github.com/amirreza98/App-dev-course/tree/step-2-backend#readme) **📍 you are here** | `step-2-backend` | ~60 min |
-| [3 · Calendar](https://github.com/amirreza98/App-dev-course/tree/step-3-calendar#readme) | `step-3-calendar` | ~50 min |
+| [2 · Backend](https://github.com/amirreza98/App-dev-course/tree/step-2-backend#readme) | `step-2-backend` | ~60 min |
+| [3 · Calendar](https://github.com/amirreza98/App-dev-course/tree/step-3-calendar#readme) **📍 you are here** | `step-3-calendar` | ~50 min |
 | [4 · Planner + AI](https://github.com/amirreza98/App-dev-course/tree/step-4-planner#readme) | `step-4-planner` | ~50 min |
 
 **How it works:** this page is the tutorial for this step. Follow it from top to bottom: copy each code block into your file → **save** → look at the browser. You keep working in your own code from step to step. The branch holds the **finished code** of the step – if you fall behind, catch up with `git checkout -f <branch> && npm install`.
@@ -31,409 +31,435 @@ npm run dev
 
 ---
 
-# Lesson 2 – Backend: saving data on a server
+# Lesson 3 – Calendar: a month view with all deadlines
 
 | | |
 |---|---|
-| ⏱️ Time | ~60 min |
-| 🏁 Start from | your code from Lesson 1 (or `git checkout -f step-1-react`) |
-| ✅ Finished result | branch `step-2-backend` |
-| 🎯 You will | build a small server, so tasks survive a refresh and you can pin places on the map |
+| ⏱️ Time | ~50 min |
+| 🏁 Start from | your code from Lesson 2 (or `git checkout -f step-2-backend && npm install`) |
+| ✅ Finished result | branch `step-3-calendar` |
+| 🎯 You will | build a month calendar from scratch, show every deadline on it, and mark tasks as done |
 
-> 🆘 **Stuck or behind?** Run `git checkout -f step-2-backend && npm install` to get the finished code of this lesson.
-
----
-
-## 💡 First: frontend vs. backend
-
-| Restaurant | Web app | In our project |
-|---|---|---|
-| 🧑 Guest at the table | **Frontend** – runs in the browser | `client/` (React) |
-| 🧑‍🍳 Kitchen | **Backend** – runs on a server | `server/` (Node + Express) – *new!* |
-| 📝 Order | **Request** | "give me all tasks" |
-| 🍝 Plate | **Response** | the list of tasks |
-
-The browser forgets everything on refresh. The kitchen keeps it. The frontend **asks**, the backend **answers**.
+> 🆘 **Stuck or behind?** Run `git checkout -f step-3-calendar && npm install` to get the finished code of this lesson.
 
 ---
 
-# Part C – Build the server
+## G1. ✍️ Server: priority, colour and "done"
 
-## C1. Create the `server` project
+Open **`server/src/routes/tasks.js`**.
 
-Stop the app (**Control + C**).
-
-**1.** Create a new folder **`server`** next to `client`, and in it a file **`server/package.json`**:
-
-```json
-{
-  "name": "server",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "node --watch src/index.js",
-    "start": "node src/index.js"
-  },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^5.3.0"
-  }
-}
-```
-
-- **Express** is a small library for building servers
-- `node --watch` restarts the server automatically when you save a file
-
-**2.** Replace the **root** `package.json` (the one next to `client/` and `server/`) with:
-
-```json
-{
-  "name": "app-dev-course",
-  "private": true,
-  "workspaces": ["client", "server"],
-  "scripts": {
-    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
-    "build": "npm run build -w client"
-  },
-  "devDependencies": {
-    "concurrently": "^9.0.0"
-  }
-}
-```
-
-- `"workspaces": ["client", "server"]` – this project now has two parts
-- `concurrently` starts **both** with one command: `npm run dev`
-
-**3.** Install everything:
-
-```bash
-npm install
-```
-
----
-
-## C2. ✍️ Your first server
-
-Create **`server/src/index.js`**:
+**1.** Under `const router = Router();`, add two lists:
 
 ```js
-import express from 'express';
-import cors from 'cors';
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-app.get('/api/health', (req, res) => res.json({ ok: true }));
-
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`));
+const COLORS = ['#4361ee', '#e63946', '#2a9d8f', '#f4a261', '#9b5de5', '#06aed5', '#e76f51', '#588157'];
+const PRIORITIES = ['low', 'medium', 'high'];
 ```
 
-Start the app:
-
-```bash
-npm run dev
-```
-
-👀 **You see in the terminal** – two programs, in two colours:
-
-```
-[server] API running on http://localhost:3001
-[client] Local: http://localhost:5173
-```
-
-Now open **http://localhost:3001/api/health** in the browser.
-👀 **You see:** `{"ok":true}` – your server answered! 🎉
-
-### 💡 What's happening?
-
-- **Node.js** runs JavaScript **outside** the browser. Same language for frontend and backend!
-- `express()` creates the server; `app.listen(3001)` makes it wait for requests on port 3001
-- `app.get('/api/health', ...)` is a **route**: *"when a GET request arrives at `/api/health`, run this function"*
-- `res.json({ ok: true })` sends back data as **JSON**
-- `app.use(...)` adds **middleware** – code that runs for every request:
-  - `express.json()` reads JSON that the frontend sends us
-  - `cors()` allows other websites/apps to call our server (a browser safety rule)
-
-🧪 **Try:** change `{ ok: true }` to `{ ok: true, teacher: 'YOUR NAME' }`, save, refresh the browser tab.
-
----
-
-## C3. ✍️ Task routes
-
-Create **`server/src/routes/tasks.js`**:
+**2.** Replace the `POST` route with:
 
 ```js
-import { Router } from 'express';
-
-const router = Router();
-
-// In-memory "database" — resets when the server restarts.
-// Next level: replace this array with a real database (MongoDB / PostgreSQL).
-let tasks = [];
-let nextId = 1;
-
-// GET /api/tasks -> list all tasks
-router.get('/', (req, res) => res.json(tasks));
-
-// POST /api/tasks -> create a task. Body: { title, deadline, hours }
+// POST /api/tasks -> create a task. Body: { title, deadline, hours, priority }
 router.post('/', (req, res) => {
-  const { title, deadline, hours } = req.body;
+  const { title, deadline, hours, priority = 'medium' } = req.body;
   if (!title || !deadline || !hours) {
     return res.status(400).json({ error: 'title, deadline and hours are required' });
   }
-  const task = { id: nextId++, title, deadline, hours: Number(hours) };
+  const id = nextId++;
+  const task = {
+    id,
+    title,
+    deadline,
+    hours: Number(hours),
+    priority: PRIORITIES.includes(priority) ? priority : 'medium',
+    color: COLORS[(id - 1) % COLORS.length],
+    done: false,
+  };
   tasks.push(task);
   res.status(201).json(task);
 });
+```
 
-// DELETE /api/tasks/:id -> remove a task
-router.delete('/:id', (req, res) => {
-  tasks = tasks.filter((t) => t.id !== Number(req.params.id));
-  res.status(204).end();
+**3.** Add a new route **above** the `DELETE` route:
+
+```js
+// PATCH /api/tasks/:id -> change some fields, e.g. { done: true } or { priority: 'high' }
+router.patch('/:id', (req, res) => {
+  const task = tasks.find((t) => t.id === Number(req.params.id));
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+  const { title, deadline, hours, priority, done } = req.body;
+  if (title !== undefined) task.title = title;
+  if (deadline !== undefined) task.deadline = deadline;
+  if (hours !== undefined) task.hours = Number(hours);
+  if (PRIORITIES.includes(priority)) task.priority = priority;
+  if (done !== undefined) task.done = Boolean(done);
+  res.json(task);
 });
-
-export default router;
 ```
 
-Then in **`server/src/index.js`**, add the import at the top and connect the routes **above** `const PORT`:
+The server restarted by itself (and forgot all tasks – memory!). Add a task in the app, then open **http://localhost:3001/api/tasks**.
+👀 **You see:** the task now also has `"priority"`, `"color"` and `"done": false`.
 
-```js
-import tasksRouter from './routes/tasks.js';
-```
+### 💡 What's new?
 
-```js
-// Project 2: AI Calendar
-app.use('/api/tasks', tasksRouter);
-```
-
-Open **http://localhost:3001/api/tasks**.
-👀 **You see:** `[]` – an empty list of tasks. The server is ready; the frontend doesn't use it yet.
-
-### 💡 HTTP: methods, URLs, status codes
-
-Every request has a **method** (what to do) and a **URL** (what it's about):
-
-| Method | Meaning | Our route |
-|---|---|---|
-| `GET` | read | `GET /api/tasks` → all tasks |
-| `POST` | create | `POST /api/tasks` → add a task |
-| `DELETE` | remove | `DELETE /api/tasks/3` → delete task 3 |
-
-Every response has a **status code**: `200` OK · `201` created · `204` done, nothing to send · `400` *your* request is wrong · `500` *our* server crashed.
-
-Reading the code:
-
-- `req` = the **request** (what the frontend sent), `res` = the **response** (what we send back)
-- `const { title, deadline, hours } = req.body` – take these three fields out of the sent data
-- **Validation:** never trust the frontend. Missing field → `400` with an error message
-- The **server** decides the `id` (`nextId++` = use it, then add 1)
-- `/:id` is a **URL parameter**: for `DELETE /api/tasks/3`, `req.params.id` is `"3"`
-- Our "database" is just an array **in memory**. More about that at the end of this lesson.
+- `priority = 'medium'` – a **default value**: if the frontend sends no priority, use `'medium'`
+- `COLORS[(id - 1) % COLORS.length]` – each task gets the next colour. `%` (modulo) is the remainder of a division, so after colour 8 we start again at 1
+- **`PATCH`** = *change some fields* of something that exists. We'll use it to tick a task as done: `PATCH /api/tasks/3` with `{ "done": true }`
+- `.find()` returns the first task with that id (or `undefined` → `404 Not Found`)
 
 ---
 
-# Part D – Connect the frontend
+## G2. ✍️ Date helpers
 
-## D1. ✍️ The bridge: proxy and `api.js`
-
-**1.** In **`client/vite.config.js`**, replace the `server: { port: 5173 },` line with:
+Dates are tricky. We keep all date code in one file. Create the folder **`client/src/utils`** and the file **`client/src/utils/dates.js`**:
 
 ```js
-  server: {
-    port: 5173,
-    // Forward /api/* calls to the Express server
-    proxy: { '/api': 'http://localhost:3001' },
-  },
-```
+// Date helpers that work with 'YYYY-MM-DD' strings in the user's LOCAL time zone.
 
-The frontend runs on 5173, the backend on 3001. The **proxy** forwards every `/api/...` call:
+const pad = (n) => String(n).padStart(2, '0');
 
-```
-Browser ──/api/tasks──▶ Vite :5173 ──forwards──▶ Express :3001
-```
+export const toYMD = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-**2.** Create **`client/src/api.js`** – one small helper for all requests:
+export const fromYMD = (s) => {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
 
-```js
-// Tiny helper around fetch so pages stay clean.
-export async function api(path, { method = 'GET', body } = {}) {
-  const res = await fetch(`/api${path}`, {
-    method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+export const todayYMD = () => toYMD(new Date());
+
+export const addDays = (ymd, n) => {
+  const d = fromYMD(ymd);
+  d.setDate(d.getDate() + n);
+  return toYMD(d);
+};
+
+export const daysBetween = (fromYmd, toYmd) =>
+  Math.round((fromYMD(toYmd) - fromYMD(fromYmd)) / 86_400_000);
+
+// All cells for a month grid, weeks starting on Monday (6 rows x 7 days)
+export function monthGrid(year, month) {
+  const first = new Date(year, month, 1);
+  const offset = (first.getDay() + 6) % 7; // Monday = 0
+  const start = new Date(year, month, 1 - offset);
+  return Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return { ymd: toYMD(d), day: d.getDate(), inMonth: d.getMonth() === month };
   });
-  if (!res.ok) throw new Error(`${method} ${path} failed: ${res.status}`);
-  return res.status === 204 ? null : res.json();
+}
+
+export const formatLong = (ymd) =>
+  fromYMD(ymd).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+
+export const relative = (ymd) => {
+  const n = daysBetween(todayYMD(), ymd);
+  if (n < 0) return `${-n}d overdue`;
+  if (n === 0) return 'today';
+  if (n === 1) return 'tomorrow';
+  return `in ${n} days`;
+};
+```
+
+Nothing changes on screen – these are tools for the next blocks. The important ones:
+
+| Function | Example | Result |
+|---|---|---|
+| `todayYMD()` | | `'2026-10-26'` |
+| `addDays(ymd, n)` | `addDays('2026-10-30', 3)` | `'2026-11-02'` |
+| `relative(ymd)` | a date 3 days from now | `'in 3 days'` |
+| `formatLong(ymd)` | `'2026-10-26'` | `'Monday, October 26'` |
+| `monthGrid(year, month)` | October 2026 | the 42 boxes of the calendar (next block) |
+
+💡 We store dates as text `'YYYY-MM-DD'`: easy to compare and sort (`'2026-10-29' < '2026-11-01'` is `true`).
+⚠️ JavaScript quirk: `getMonth()` counts from **0** (January = 0). That's why you see `+ 1` and `- 1`.
+
+### 💡 How `monthGrid` works
+
+A month calendar always shows **6 weeks × 7 days = 42 boxes**, starting on a Monday:
+
+```
+October 2026 – the 1st is a Thursday → go back 3 days → start on Mon 28 Sept
+Mon Tue Wed Thu Fri Sat Sun
+ 28  29  30   1   2   3   4
+  5   6   7   8 …
+```
+
+For each of the 42 days it returns `{ ymd: '2026-09-28', day: 28, inMonth: false }`. `inMonth` tells us whether to show it grey.
+
+---
+
+## G3. ✍️ A calendar component
+
+The calendar is a big piece, so it gets **its own component in its own file**. Create the folder **`client/src/components`** and the file **`client/src/components/MonthCalendar.jsx`**:
+
+```jsx
+import { monthGrid } from '../utils/dates.js';
+
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+export default function MonthCalendar({ month }) {
+  const year = month.getFullYear();
+  const m = month.getMonth();
+  const cells = monthGrid(year, m);
+
+  const title = month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+  return (
+    <div className="cal">
+      <div className="cal-header">
+        <h3>{title}</h3>
+      </div>
+
+      <div className="cal-grid">
+        {WEEKDAYS.map((w) => <div key={w} className="cal-weekday">{w}</div>)}
+
+        {cells.map(({ ymd, day, inMonth }) => (
+          <div key={ymd} className={inMonth ? 'cal-cell' : 'cal-cell muted'}>
+            <div className="cal-day">
+              <span>{day}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 ```
 
-- `fetch` is the browser's built-in way to send a request
-- `JSON.stringify(body)` turns our object into JSON text
-- `res.ok` is true for status 200–299, otherwise we throw an error
-- **`async` / `await`:** asking the server takes time. `await` = *"wait here until the answer arrives"*. A function that uses `await` must be `async`.
+Now use it on the calendar page, in a two-column layout. Open **`client/src/pages/CalendarPage.jsx`**:
 
-With it, a request is one line:
+**1.** Import it at the top:
+
+```jsx
+import MonthCalendar from '../components/MonthCalendar.jsx';
+```
+
+**2.** Change the outer `<div className="simple-page">` to `<div className="cal-page">`, and wrap everything that's inside it in a `<section className="cal-side">`. Then add a second section with the calendar. The JSX should have this shape:
+
+```jsx
+  return (
+    <div className="cal-page">
+      {/* ---------- Left column ---------- */}
+      <section className="cal-side">
+        {/* ...everything that was there before: h2, hint, form, h3, list... */}
+      </section>
+
+      {/* ---------- Right column ---------- */}
+      <section className="cal-main">
+        <MonthCalendar month={new Date()} />
+      </section>
+    </div>
+  );
+```
+
+👀 **You see:** tasks on the left, a calendar of the current month on the right!
+
+### 💡 Props: giving data to a component
+
+```jsx
+<MonthCalendar month={new Date()} />
+```
+
+```jsx
+export default function MonthCalendar({ month }) {
+```
+
+`month={...}` is a **prop** (property). It works like an argument to a function: the page gives data **down** to the calendar. The calendar uses it to know which month to draw.
+
+🧱 Components are LEGO bricks – props are how they connect.
+
+---
+
+## G4. ✍️ Switch months
+
+The page should **remember** which month is shown – that's state. And the calendar needs a way to **tell** the page *"go to the next month"*.
+
+**In `CalendarPage.jsx`:** add a state under the other `useState` lines, and pass two props:
+
+```jsx
+  const [month, setMonth] = useState(() => new Date()); // which month the calendar shows
+```
+
+```jsx
+        <MonthCalendar month={month} onMonthChange={setMonth} />
+```
+
+**In `MonthCalendar.jsx`:**
+
+**1.** Accept the new prop:
+
+```jsx
+export default function MonthCalendar({ month, onMonthChange }) {
+```
+
+**2.** Above `const title = ...`, add:
+
+```jsx
+  const shift = (n) => onMonthChange(new Date(year, m + n, 1));
+```
+
+**3.** Replace the `cal-header` div with:
+
+```jsx
+      <div className="cal-header">
+        <button onClick={() => shift(-1)}>‹</button>
+        <h3>{title}</h3>
+        <button onClick={() => shift(1)}>›</button>
+        <button className="ghost" onClick={() => onMonthChange(new Date())}>
+          Today
+        </button>
+      </div>
+```
+
+👀 **You see:** **‹** and **›** switch months, **Today** jumps back.
+
+### 💡 A function as a prop
+
+`onMonthChange={setMonth}` – we pass a **function** down. When you click **›**:
+
+```
+calendar: shift(1) → onMonthChange(November) → page: setMonth(November) → page redraws → calendar gets month = November
+```
+
+The state lives in the **page**, the calendar just shows it and reports clicks. This is called **lifting state up** – the page will need `month` again soon.
+
+`new Date(year, m + 1, 1)` – JavaScript is smart: month 12 automatically becomes January of the next year.
+
+---
+
+## G5. ✍️ Deadlines on the calendar
+
+The calendar doesn't want a *list of tasks*. It wants to know *"what happens on each day?"*:
 
 ```js
-api('/tasks')                                            // GET
-api('/tasks', { method: 'POST', body: { title } })      // POST
-api('/tasks/3', { method: 'DELETE' })                    // DELETE
+// tasks (what we store)                       events (what the calendar needs)
+[{ title: 'Exam', deadline: '2026-10-29' }]  →  { '2026-10-29': [{ label: 'Exam', ... }] }
 ```
 
----
+**In `CalendarPage.jsx`:**
 
-## D2. ✍️ Save tasks on the server
-
-Open **`client/src/pages/CalendarPage.jsx`**.
-
-**1.** At the top, import the helper:
+**1.** Add `useMemo` to the React import:
 
 ```jsx
-import { api } from '../api.js';
+import { useEffect, useMemo, useState } from 'react';
 ```
 
-**2.** Replace the `addTask` function with:
+**2.** Just **before** `return (`, add:
 
 ```jsx
-  const addTask = async (e) => {
-    e.preventDefault(); // don't reload the page
-    if (!title.trim()) return;
-    // NEW: send the task to the server; it answers with the saved task (incl. id)
-    const task = await api('/tasks', { method: 'POST', body: { title, deadline, hours } });
-    setTasks([...tasks, task]); // new array = React notices the change
-    setTitle('');
-  };
+  // Turn tasks into calendar events: { 'YYYY-MM-DD': [event, ...] }
+  const events = useMemo(() => {
+    const ev = {};
+    for (const t of tasks) {
+      (ev[t.deadline] ||= []).push({
+        key: `d-${t.id}`, kind: 'deadline', label: t.title, color: t.color, done: t.done, task: t,
+      });
+    }
+    return ev;
+  }, [tasks]);
 ```
 
-Add two tasks. Then open **http://localhost:3001/api/tasks** in a new tab.
-👀 **You see:** your tasks as JSON – they're stored on the server now!
-
-🤔 Go back to the app and **refresh**. The list is empty again!? But the server still has them (check the other tab)…
-The page simply never **asks** the server. Let's fix that.
-
----
-
-## D3. ✍️ Load tasks when the page opens
-
-**1.** Change the first import line to also import `useEffect`:
+**3.** Pass it to the calendar:
 
 ```jsx
-import { useEffect, useState } from 'react';
+        <MonthCalendar month={month} onMonthChange={setMonth} events={events} />
 ```
 
-**2.** Under the `useState` lines, add:
+**In `MonthCalendar.jsx`:**
+
+**1.** Under `WEEKDAYS`, add `const MAX_CHIPS = 3;` and accept the prop: `({ month, onMonthChange, events })`
+
+**2.** Replace the `cells.map(...)` part with:
 
 ```jsx
-  // NEW in step 2: load the tasks from the server when the page opens
-  useEffect(() => {
-    api('/tasks').then(setTasks).catch(console.error);
-  }, []);
+        {cells.map(({ ymd, day, inMonth }) => {
+          const list = events[ymd] || [];
+
+          return (
+            <div key={ymd} className={inMonth ? 'cal-cell' : 'cal-cell muted'}>
+              <div className="cal-day">
+                <span>{day}</span>
+              </div>
+              {list.slice(0, MAX_CHIPS).map((e) => (
+                <div
+                  key={e.key}
+                  className={`chip deadline ${e.done ? 'done' : ''}`}
+                  style={{ background: e.color }}
+                  title={e.label}
+                >
+                  🏁 {e.label}
+                </div>
+              ))}
+              {list.length > MAX_CHIPS && <div className="chip more">+{list.length - MAX_CHIPS} more</div>}
+            </div>
+          );
+        })}
 ```
 
-👀 **You see:** your tasks are back! **Refresh** – they stay. 🎉
+👀 **You see:** add a task → a coloured **🏁 chip** appears on its deadline day! Try a deadline next month, then click **›**.
 
-- `useEffect(..., [])` – run **once** when the page appears (like creating the map in Lesson 1)
-- `.then(setTasks)` – another way to wait: *"when the answer arrives, put it into the state"*
+### 💡 What's new?
 
----
-
-## D4. ✍️ Delete on the server too
-
-Delete a task and refresh… it comes back! The ✕ only removed it from the screen. Replace `removeTask`:
-
-```jsx
-  const removeTask = async (id) => {
-    await api(`/tasks/${id}`, { method: 'DELETE' });
-    setTasks(tasks.filter((t) => t.id !== id));
-  };
-```
-
-And update the hint under the `<h2>`:
-
-```jsx
-      <p className="hint">Step 2: tasks are saved on the server. Refresh — they stay!</p>
-```
-
-👀 **You see:** delete → refresh → it stays deleted. ✅
-
-🔎 **Look behind the scenes:** right-click → **Inspect** → **Network** tab. Add a task and click the `tasks` request: you see the method (POST), what was sent, and the server's answer.
+- **Derived data:** `events` is *calculated* from `tasks`, not stored separately. One source of truth
+- **`useMemo`** remembers the result and only recalculates when `tasks` changes
+- `(ev[t.deadline] ||= [])` – *"if this day has no list yet, create an empty one"*, then `.push` into it
+- `events[ymd] || []` – the events of this day, or an empty list
+- `style={{ background: e.color }}` – a style from JavaScript. Two `{{ }}`: one for "JavaScript here", one for the object
+- `list.slice(0, 3)` – show max 3 chips, the rest becomes *"+2 more"*
 
 <details>
-<summary>✅ <b>Checkpoint:</b> your <code>CalendarPage.jsx</code> should now look like this</summary>
+<summary>📄 <code>MonthCalendar.jsx</code> so far</summary>
 
 ```jsx
-import { useEffect, useState } from 'react';
-import { api } from '../api.js';
+import { monthGrid } from '../utils/dates.js';
 
-// Today as 'YYYY-MM-DD' (the format <input type="date"> uses)
-const today = () => new Date().toISOString().slice(0, 10);
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const MAX_CHIPS = 3;
 
-export default function CalendarPage() {
-  // State = data that can change. When it changes, React re-draws the page.
-  const [tasks, setTasks] = useState([]);
-  const [title, setTitle] = useState('');
-  const [deadline, setDeadline] = useState(today());
-  const [hours, setHours] = useState(3);
+export default function MonthCalendar({ month, onMonthChange, events }) {
+  const year = month.getFullYear();
+  const m = month.getMonth();
+  const cells = monthGrid(year, m);
 
-  // NEW in step 2: load the tasks from the server when the page opens
-  useEffect(() => {
-    api('/tasks').then(setTasks).catch(console.error);
-  }, []);
-
-  const addTask = async (e) => {
-    e.preventDefault(); // don't reload the page
-    if (!title.trim()) return;
-    // NEW: send the task to the server; it answers with the saved task (incl. id)
-    const task = await api('/tasks', { method: 'POST', body: { title, deadline, hours } });
-    setTasks([...tasks, task]); // new array = React notices the change
-    setTitle('');
-  };
-
-  const removeTask = async (id) => {
-    await api(`/tasks/${id}`, { method: 'DELETE' });
-    setTasks(tasks.filter((t) => t.id !== id));
-  };
+  const shift = (n) => onMonthChange(new Date(year, m + n, 1));
+  const title = month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 
   return (
-    <div className="simple-page">
-      <h2>AI Calendar</h2>
-      <p className="hint">Step 2: tasks are saved on the server. Refresh — they stay!</p>
+    <div className="cal">
+      <div className="cal-header">
+        <button onClick={() => shift(-1)}>‹</button>
+        <h3>{title}</h3>
+        <button onClick={() => shift(1)}>›</button>
+        <button className="ghost" onClick={() => onMonthChange(new Date())}>
+          Today
+        </button>
+      </div>
 
-      <form className="card form" onSubmit={addTask}>
-        <input
-          placeholder="What do you need to do?"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <div className="row">
-          <label>
-            Deadline
-            <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
-          </label>
-          <label>
-            Hours
-            <input type="number" min="0.5" step="0.5" value={hours}
-              onChange={(e) => setHours(e.target.value)} />
-          </label>
-        </div>
-        <button type="submit">+ Add task</button>
-      </form>
+      <div className="cal-grid">
+        {WEEKDAYS.map((w) => <div key={w} className="cal-weekday">{w}</div>)}
 
-      <h3>Tasks ({tasks.length})</h3>
-      {!tasks.length && <p className="hint">No tasks yet.</p>}
-      <ul className="task-list">
-        {tasks.map((t) => (
-          <li key={t.id}>
-            <div className="task-info">
-              <div className="task-title">{t.title}</div>
-              <div className="task-meta">{t.hours}h · due {t.deadline}</div>
+        {cells.map(({ ymd, day, inMonth }) => {
+          const list = events[ymd] || [];
+
+          return (
+            <div key={ymd} className={inMonth ? 'cal-cell' : 'cal-cell muted'}>
+              <div className="cal-day">
+                <span>{day}</span>
+              </div>
+              {list.slice(0, MAX_CHIPS).map((e) => (
+                <div
+                  key={e.key}
+                  className={`chip deadline ${e.done ? 'done' : ''}`}
+                  style={{ background: e.color }}
+                  title={e.label}
+                >
+                  🏁 {e.label}
+                </div>
+              ))}
+              {list.length > MAX_CHIPS && <div className="chip more">+{list.length - MAX_CHIPS} more</div>}
             </div>
-            <button className="small" onClick={() => removeTask(t.id)}>✕</button>
-          </li>
-        ))}
-      </ul>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -442,174 +468,390 @@ export default function CalendarPage() {
 
 ---
 
-# Part E – Pins on the map 📍
+## G6. ✍️ Click a day, highlight today
 
-## E1. ✍️ Place routes
+**In `CalendarPage.jsx`:**
 
-Create **`server/src/routes/places.js`** – the same idea as tasks, for places with a name and coordinates:
+**1.** Import two date helpers:
 
-```js
-import { Router } from 'express';
-
-const router = Router();
-
-// In-memory "database" — resets when the server restarts.
-// Next step for students: replace with a real DB (MongoDB / PostgreSQL).
-let places = [
-  { id: 1, name: 'Brandenburg Gate', lng: 13.3777, lat: 52.5163 },
-];
-let nextId = 2;
-
-router.get('/', (req, res) => res.json(places));
-
-router.post('/', (req, res) => {
-  const { name, lng, lat } = req.body;
-  if (!name || lng == null || lat == null) {
-    return res.status(400).json({ error: 'name, lng and lat are required' });
-  }
-  const place = { id: nextId++, name, lng: Number(lng), lat: Number(lat) };
-  places.push(place);
-  res.status(201).json(place);
-});
-
-router.delete('/:id', (req, res) => {
-  places = places.filter((p) => p.id !== Number(req.params.id));
-  res.status(204).end();
-});
-
-export default router;
+```jsx
+import { formatLong, todayYMD } from '../utils/dates.js';
 ```
 
-It starts with one example: the Brandenburg Gate.
+**2.** Add a state for the clicked day (under `month`):
 
-In **`server/src/index.js`**, add the import and the route:
-
-```js
-import placesRouter from './routes/places.js';
+```jsx
+  const [selected, setSelected] = useState(todayYMD()); // which day is clicked
 ```
 
-```js
-// Project 1: 3D Map
-app.use('/api/places', placesRouter);
+**3.** Before `return (`, after the `events` block:
+
+```jsx
+  const dayEvents = events[selected] || [];
 ```
 
-Check **http://localhost:3001/api/places** → 👀 you see the Brandenburg Gate as JSON.
+**4.** Replace the `<MonthCalendar ... />` line with the calendar **plus** a details box:
 
-<details>
-<summary>✅ <b>Checkpoint:</b> <code>server/src/index.js</code></summary>
+```jsx
+        <MonthCalendar
+          month={month}
+          onMonthChange={setMonth}
+          events={events}
+          selected={selected}
+          onSelect={setSelected}
+        />
 
-```js
-import express from 'express';
-import cors from 'cors';
-import placesRouter from './routes/places.js';
-import tasksRouter from './routes/tasks.js';
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-app.get('/api/health', (req, res) => res.json({ ok: true }));
-
-// Project 1: 3D Map
-app.use('/api/places', placesRouter);
-
-// Project 2: AI Calendar
-app.use('/api/tasks', tasksRouter);
-
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`));
+        <div className="card day-details">
+          <h3>{formatLong(selected)}</h3>
+          {!dayEvents.length && <p className="hint">No deadlines this day.</p>}
+          {dayEvents.map((e) => (
+            <div key={e.key} className="day-item">
+              <i className="dot" style={{ background: e.color }} />
+              <span><b>🏁 Deadline:</b> {e.label} {e.done && '✅'}</span>
+            </div>
+          ))}
+        </div>
 ```
-</details>
+
+**In `MonthCalendar.jsx`:** replace the **whole file** with the final version:
+
+```jsx
+import { monthGrid, todayYMD } from '../utils/dates.js';
+
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const MAX_CHIPS = 3;
+
+/**
+ * Month view.
+ * events: { 'YYYY-MM-DD': [{ key, label, color, done }] }
+ */
+export default function MonthCalendar({ month, onMonthChange, events, selected, onSelect }) {
+  const year = month.getFullYear();
+  const m = month.getMonth();
+  const today = todayYMD();
+  const cells = monthGrid(year, m);
+
+  const shift = (n) => onMonthChange(new Date(year, m + n, 1));
+  const title = month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+
+  return (
+    <div className="cal">
+      <div className="cal-header">
+        <button onClick={() => shift(-1)}>‹</button>
+        <h3>{title}</h3>
+        <button onClick={() => shift(1)}>›</button>
+        <button className="ghost" onClick={() => { onMonthChange(new Date()); onSelect(today); }}>
+          Today
+        </button>
+      </div>
+
+      <div className="cal-grid">
+        {WEEKDAYS.map((w) => <div key={w} className="cal-weekday">{w}</div>)}
+
+        {cells.map(({ ymd, day, inMonth }) => {
+          const list = events[ymd] || [];
+          const classes = [
+            'cal-cell',
+            !inMonth && 'muted',
+            ymd < today && 'past',
+            ymd === today && 'today',
+            ymd === selected && 'selected',
+          ].filter(Boolean).join(' ');
+
+          return (
+            <div key={ymd} className={classes} onClick={() => onSelect(ymd)}>
+              <div className="cal-day">
+                <span>{day}</span>
+              </div>
+              {list.slice(0, MAX_CHIPS).map((e) => (
+                <div
+                  key={e.key}
+                  className={`chip deadline ${e.done ? 'done' : ''}`}
+                  style={{ background: e.color }}
+                  title={e.label}
+                >
+                  🏁 {e.label}
+                </div>
+              ))}
+              {list.length > MAX_CHIPS && <div className="chip more">+{list.length - MAX_CHIPS} more</div>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+```
+
+What changed in the calendar:
+- new props `selected` and `onSelect`
+- every day box has `onClick={() => onSelect(ymd)}` → tells the page which day was clicked
+- **Today** also selects today
+- the CSS classes are built from a list:
+
+```jsx
+const classes = [
+  'cal-cell',
+  !inMonth && 'muted',          // grey if not in this month
+  ymd < today && 'past',        // faded if in the past
+  ymd === today && 'today',     // dark border
+  ymd === selected && 'selected', // light blue
+].filter(Boolean).join(' ');    // e.g. "cal-cell today selected"
+```
+
+Each line is a class name **or** `false`. `.filter(Boolean)` removes the `false`s, `.join(' ')` glues the rest together.
+
+👀 **You see:** today has a dark border. Click a day → it turns light blue, and the box below shows its date and deadlines.
+
+💡 `selected` lives in the **page**, because **two** things need it: the calendar (highlight) and the details box. *Put state in the closest parent that needs it.*
 
 ---
 
-## E2. ✍️ Show the places as pins
+## G7. ✍️ Priority, done checkbox and stats
 
-Open **`client/src/pages/MapPage.jsx`**.
-
-**1.** Change the imports: add `useState`, and import the helper:
+The page is growing. Replace the **whole** **`client/src/pages/CalendarPage.jsx`** with:
 
 ```jsx
-import { useEffect, useRef, useState } from 'react';
-```
-
-```jsx
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
-```
+import MonthCalendar from '../components/MonthCalendar.jsx';
+import { addDays, formatLong, fromYMD, relative, todayYMD } from '../utils/dates.js';
 
-**2.** Under `const mapRef = ...`, add:
+const emptyForm = () => ({ title: '', deadline: addDays(todayYMD(), 7), hours: 3, priority: 'medium' });
 
-```jsx
-  const markersRef = useRef([]);     // the red pins currently on the map
-  const [places, setPlaces] = useState([]); // NEW in step 2: places saved on the server
-```
+export default function CalendarPage() {
+  const [tasks, setTasks] = useState([]);
+  const [form, setForm] = useState(emptyForm);
+  const [month, setMonth] = useState(() => new Date()); // which month the calendar shows
+  const [selected, setSelected] = useState(todayYMD()); // which day is clicked
 
-**3.** **After** the big `useEffect` (after its closing `}, []);`), add two more effects:
-
-```jsx
-  // NEW: load saved places from the server
+  // Load tasks once
   useEffect(() => {
-    api('/places').then(setPlaces).catch(console.error);
+    api('/tasks').then(setTasks).catch(console.error);
   }, []);
 
-  // NEW: draw a red marker for every place (runs again whenever `places` changes)
-  useEffect(() => {
-    markersRef.current.forEach((m) => m.remove());
-    markersRef.current = places.map((p) =>
-      new maplibregl.Marker({ color: '#e63946' })
-        .setLngLat([p.lng, p.lat])
-        .setPopup(new maplibregl.Popup().setText(p.name))
-        .addTo(mapRef.current)
-    );
-  }, [places]);
+  // ---- Task actions ----
+  const addTask = async (e) => {
+    e.preventDefault();
+    if (!form.title.trim()) return;
+    const task = await api('/tasks', { method: 'POST', body: form });
+    setTasks((prev) => [...prev, task]);
+    setForm(emptyForm());
+  };
+
+  const updateTask = async (id, changes) => {
+    const updated = await api(`/tasks/${id}`, { method: 'PATCH', body: changes });
+    setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+  };
+
+  const removeTask = async (id) => {
+    await api(`/tasks/${id}`, { method: 'DELETE' });
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const showDay = (ymd) => {
+    setMonth(fromYMD(ymd));
+    setSelected(ymd);
+  };
+
+  // ---- Turn tasks into calendar events: { 'YYYY-MM-DD': [event, ...] } ----
+  const events = useMemo(() => {
+    const ev = {};
+    for (const t of tasks) {
+      (ev[t.deadline] ||= []).push({
+        key: `d-${t.id}`, kind: 'deadline', label: t.title, color: t.color, done: t.done, task: t,
+      });
+    }
+    return ev;
+  }, [tasks]);
+
+  // ---- Stats ----
+  const open = tasks.filter((t) => !t.done);
+  const totalHours = open.reduce((s, t) => s + t.hours, 0);
+  const nextDeadline = [...open].sort((a, b) => a.deadline.localeCompare(b.deadline))[0];
+  const sortedTasks = [...tasks].sort(
+    (a, b) => Number(a.done) - Number(b.done) || a.deadline.localeCompare(b.deadline)
+  );
+  const dayEvents = events[selected] || [];
+
+  return (
+    <div className="cal-page">
+      {/* ---------- Left column ---------- */}
+      <section className="cal-side">
+        <h2>AI Calendar</h2>
+        <p className="hint">Step 3: every deadline appears on the calendar.</p>
+
+        <form className="card form" onSubmit={addTask}>
+          <input
+            placeholder="What do you need to do?"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+          />
+          <div className="row">
+            <label>
+              Deadline
+              <input type="date" value={form.deadline}
+                onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
+            </label>
+            <label>
+              Hours
+              <input type="number" min="0.5" step="0.5" value={form.hours}
+                onChange={(e) => setForm({ ...form, hours: e.target.value })} />
+            </label>
+            <label>
+              Priority
+              <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+          </div>
+          <button type="submit">+ Add task</button>
+        </form>
+
+        <div className="stats">
+          <div><b>{open.length}</b><span>open tasks</span></div>
+          <div><b>{totalHours}h</b><span>work left</span></div>
+          <div><b>{tasks.length - open.length}</b><span>done</span></div>
+        </div>
+        {nextDeadline && (
+          <p className="hint">Next deadline: <b>{nextDeadline.title}</b> {relative(nextDeadline.deadline)}</p>
+        )}
+
+        <h3>Tasks</h3>
+        {!tasks.length && <p className="hint">No tasks yet.</p>}
+        <ul className="task-list">
+          {sortedTasks.map((t) => (
+            <li key={t.id} className={t.done ? 'done' : ''}>
+              <input type="checkbox" checked={t.done} onChange={() => updateTask(t.id, { done: !t.done })} />
+              <i className="dot" style={{ background: t.color }} />
+              <div className="task-info" onClick={() => showDay(t.deadline)}>
+                <div className="task-title">{t.title}</div>
+                <div className="task-meta">
+                  {t.hours}h · due {t.deadline} ({relative(t.deadline)})
+                  <span className={`badge ${t.priority}`}>{t.priority}</span>
+                </div>
+              </div>
+              <button className="small" onClick={() => removeTask(t.id)}>✕</button>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {/* ---------- Right column ---------- */}
+      <section className="cal-main">
+        <MonthCalendar
+          month={month}
+          onMonthChange={setMonth}
+          events={events}
+          selected={selected}
+          onSelect={setSelected}
+        />
+
+        <div className="card day-details">
+          <h3>{formatLong(selected)}</h3>
+          {!dayEvents.length && <p className="hint">No deadlines this day.</p>}
+          {dayEvents.map((e) => (
+            <div key={e.key} className="day-item">
+              <i className="dot" style={{ background: e.color }} />
+              <span><b>🏁 Deadline:</b> {e.label} {e.done && '✅'}</span>
+            </div>
+          ))}
+          <p className="hint">Next step: plan <i>when</i> to work on each task, so it's not all left for the last day.</p>
+        </div>
+      </section>
+    </div>
+  );
+}
 ```
 
-👀 **You see:** a red pin on the Brandenburg Gate. Click it → its name pops up.
+👀 **You see:**
+- a **Priority** dropdown; each task shows a coloured dot and a priority badge
+- a **checkbox**: tick it → the task is crossed out in the list **and** on the calendar
+- **stats**: open tasks, hours of work left, done
+- click a task → the calendar **jumps** to its deadline (try one in another month!)
 
-### 💡 The dependency list decides *when* an effect runs
+### 💡 What's new? (read the file from top to bottom with these notes)
 
-| Dependency list | Runs… |
-|---|---|
-| `[]` | once, when the page appears |
-| `[places]` | at the start **and every time `places` changes** |
+**One state object for the whole form** – instead of 4 separate `useState`s:
 
-The second effect removes all old pins and draws one pin per place. Whenever the list changes, the pins update **automatically**.
+```jsx
+const emptyForm = () => ({ title: '', deadline: addDays(todayYMD(), 7), hours: 3, priority: 'medium' });
+const [form, setForm] = useState(emptyForm);
+
+<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+```
+
+`{ ...form, title: 'new' }` = *"copy all fields, but replace `title`"*. The default deadline is now one week ahead.
+
+**Changing one task with `PATCH`:**
+
+```jsx
+const updateTask = async (id, changes) => {
+  const updated = await api(`/tasks/${id}`, { method: 'PATCH', body: changes });
+  setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+};
+
+<input type="checkbox" checked={t.done} onChange={() => updateTask(t.id, { done: !t.done })} />
+```
+
+`prev.map((t) => (t.id === id ? updated : t))` – *"go through all tasks; use the new version for the changed one, keep the others"*. `!t.done` flips `true` ↔ `false`.
+
+**Stats are just calculations on the list:**
+
+```jsx
+const open = tasks.filter((t) => !t.done);
+const totalHours = open.reduce((s, t) => s + t.hours, 0);
+const nextDeadline = [...open].sort((a, b) => a.deadline.localeCompare(b.deadline))[0];
+```
+
+**Click a task → jump there:**
+
+```jsx
+const showDay = (ymd) => {
+  setMonth(fromYMD(ymd));   // show the right month
+  setSelected(ymd);         // highlight the day
+};
+```
+
+This is why `month` and `selected` live in the page: the **task list** can now control the calendar too.
 
 ---
 
-## E3. ✍️ Click to save a place
+## G8. ✍️ Map: a list of saved places
 
-**1.** Inside the **first** `useEffect` (the one that creates the map), just **before** `mapRef.current = map;`, add:
+Back to the map! Open **`client/src/pages/MapPage.jsx`**.
 
-```jsx
-    // NEW: click on the map -> save a place on the server
-    map.on('click', async (e) => {
-      const name = window.prompt('Name this place:');
-      if (!name) return;
-      const place = await api('/places', {
-        method: 'POST',
-        body: { name, lng: e.lngLat.lng, lat: e.lngLat.lat },
-      });
-      setPlaces((prev) => [...prev, place]);
-    });
-```
-
-**2.** In the side panel, update the hint and show how many places there are:
+**1.** After the `flyTo` function, add:
 
 ```jsx
-        <p className="hint">Drag with right mouse / Ctrl to rotate. Click the map to save a place.</p>
+  // NEW in step 3: delete a saved place
+  const removePlace = async (id) => {
+    await api(`/places/${id}`, { method: 'DELETE' });
+    setPlaces((prev) => prev.filter((p) => p.id !== id));
+  };
 ```
+
+**2.** Replace the line `<p className="hint">📍 {places.length} saved place(s) ...</p>` with:
 
 ```jsx
-        <p className="hint">📍 {places.length} saved place(s) — click a red pin to see its name.</p>
+        {/* NEW: list of saved places – click to fly there */}
+        <h3>Saved places</h3>
+        {!places.length && <p className="hint">Click on the map to save your first place.</p>}
+        <ul className="list">
+          {places.map((p) => (
+            <li key={p.id}>
+              <span className="link" onClick={() => flyTo([p.lng, p.lat])}>{p.name}</span>
+              <button className="small" onClick={() => removePlace(p.id)}>✕</button>
+            </li>
+          ))}
+        </ul>
 ```
 
-(put the second one after the city buttons, before `</aside>`)
+👀 **You see:** a list of your places. Click one → the camera flies there. ✕ → the place **and its pin** disappear.
 
-👀 **You see:** click any building → name it → a new red pin appears. **Refresh** – all pins are still there! 🎉
-
-💡 `e.lngLat` – the coordinates where you clicked.
-💡 `setPlaces((prev) => [...prev, place])` – the **function form** of setState: *"take the latest list and add this place"*. We need it here because this click listener was created once, at the start – a plain `places` inside it would be stuck at its old value (the empty list).
+💡 We didn't write any code to remove the pin! Deleting changes `places` → the marker effect from Lesson 2 (`[places]`) runs again → pins are redrawn. **Change the data, the screen follows.**
 
 <details>
 <summary>✅ <b>Checkpoint:</b> your <code>MapPage.jsx</code> should now look like this</summary>
@@ -705,6 +947,12 @@ export default function MapPage() {
   const flyTo = (center) =>
     mapRef.current.flyTo({ center, zoom: 16, pitch: 60, speed: 1.2 });
 
+  // NEW in step 3: delete a saved place
+  const removePlace = async (id) => {
+    await api(`/places/${id}`, { method: 'DELETE' });
+    setPlaces((prev) => prev.filter((p) => p.id !== id));
+  };
+
   return (
     <div className="map-layout">
       <aside className="panel">
@@ -718,7 +966,17 @@ export default function MapPage() {
           ))}
         </div>
 
-        <p className="hint">📍 {places.length} saved place(s) — click a red pin to see its name.</p>
+        {/* NEW: list of saved places – click to fly there */}
+        <h3>Saved places</h3>
+        {!places.length && <p className="hint">Click on the map to save your first place.</p>}
+        <ul className="list">
+          {places.map((p) => (
+            <li key={p.id}>
+              <span className="link" onClick={() => flyTo([p.lng, p.lat])}>{p.name}</span>
+              <button className="small" onClick={() => removePlace(p.id)}>✕</button>
+            </li>
+          ))}
+        </ul>
       </aside>
       <div ref={containerRef} className="map" />
     </div>
@@ -729,33 +987,43 @@ export default function MapPage() {
 
 ---
 
-## 🤔 One last experiment
+## 🤔 Think about it
 
-Stop the app (**Control + C**) and start it again. Your tasks and places are **gone**!
-
-The server keeps data in an array **in memory** – a restart wipes it. Real apps use a **database** (PostgreSQL, MongoDB…) that writes to disk. A great idea for your own project later!
+The calendar now shows **when things are due**. But for someone who always starts the night before, that's not enough. They need to know **when to work** on each task. → Lesson 4.
 
 ## 💪 Bonus exercises
 
-**A.** Add a route `GET /api/tasks/count` that returns `{ "count": 3 }`.
+**A.** Highlight weekends with a light background.
 
 <details><summary>💡 Solution</summary>
 
-In `server/src/routes/tasks.js`, **above** the `/:id` route:
+In `MonthCalendar.jsx`, the position `i` of each box tells the weekday (0 = Mon … 6 = Sun):
 
-```js
-router.get('/count', (req, res) => res.json({ count: tasks.length }));
+```jsx
+{cells.map(({ ymd, day, inMonth }, i) => {
+  // ...
+  const classes = [
+    'cal-cell',
+    i % 7 >= 5 && 'weekend',
+    // ...
+```
+
+In `client/src/index.css`:
+
+```css
+.cal-cell.weekend { background: #fbf7ef; }
 ```
 </details>
 
-**B.** Make the server reject tasks with 0 or negative hours.
+**B.** Ask *"Delete this task?"* before deleting.
 
 <details><summary>💡 Solution</summary>
 
-```js
-if (!title || !deadline || !(Number(hours) > 0)) {
-  return res.status(400).json({ error: 'title, deadline and positive hours are required' });
-}
+```jsx
+const removeTask = async (id) => {
+  if (!window.confirm('Delete this task?')) return;
+  // ...the rest stays the same
+};
 ```
 </details>
 
@@ -763,16 +1031,14 @@ if (!title || !deadline || !(Number(hours) > 0)) {
 
 | Word | Meaning |
 |---|---|
-| **Frontend / backend** | the part in the browser / the part on the server |
-| **Request / response** | the question the frontend sends / the answer |
-| **HTTP method** | `GET` read · `POST` create · `DELETE` remove |
-| **Status code** | 200 ok · 201 created · 400 your mistake · 500 server's mistake |
-| **JSON** | text format for data, looks like a JS object |
-| **Route** | "for this method + URL, run this function" |
-| **Middleware** | code that runs for every request (`cors`, `express.json`) |
-| **`async` / `await`** | wait for something slow (like a server answer) |
-| **Proxy** | Vite forwards `/api` calls to the backend |
+| **Props** | data a parent gives to a child component |
+| **Callback prop** | a function given as a prop, so the child can report something (`onSelect`) |
+| **Lifting state up** | keep state in the parent that needs it, pass it down |
+| **Derived data** | calculated from state instead of stored (`events` from `tasks`) |
+| **`useMemo`** | remember a calculation until its inputs change |
+| **`PATCH`** | change some fields of an existing item |
+| **`.find()` / `.reduce()` / `.sort()`** | find one item / combine all into one value / order a list |
 
 ## ➡️ Next
 
-**[Lesson 3 – Calendar](https://github.com/amirreza98/App-dev-course/tree/step-3-calendar#readme)**: we show all deadlines on a real month calendar.
+**[Lesson 4 – Planner + AI](https://github.com/amirreza98/App-dev-course/tree/step-4-planner#readme)**: the app plans *when* to work on each task.

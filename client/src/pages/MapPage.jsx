@@ -88,6 +88,12 @@ export default function MapPage() {
   const flyTo = (center) =>
     mapRef.current.flyTo({ center, zoom: 16, pitch: 60, speed: 1.2 });
 
+  // NEW in step 3: delete a saved place
+  const removePlace = async (id) => {
+    await api(`/places/${id}`, { method: 'DELETE' });
+    setPlaces((prev) => prev.filter((p) => p.id !== id));
+  };
+
   return (
     <div className="map-layout">
       <aside className="panel">
@@ -101,7 +107,17 @@ export default function MapPage() {
           ))}
         </div>
 
-        <p className="hint">📍 {places.length} saved place(s) — click a red pin to see its name.</p>
+        {/* NEW: list of saved places – click to fly there */}
+        <h3>Saved places</h3>
+        {!places.length && <p className="hint">Click on the map to save your first place.</p>}
+        <ul className="list">
+          {places.map((p) => (
+            <li key={p.id}>
+              <span className="link" onClick={() => flyTo([p.lng, p.lat])}>{p.name}</span>
+              <button className="small" onClick={() => removePlace(p.id)}>✕</button>
+            </li>
+          ))}
+        </ul>
       </aside>
       <div ref={containerRef} className="map" />
     </div>
