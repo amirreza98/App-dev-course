@@ -7,5 +7,9 @@ export default defineConfig({
   resolve: { dedupe: ['react', 'react-dom'] },
   // MapLibre loads its web worker relative to its own file; pre-bundling breaks that
   optimizeDeps: { exclude: ['maplibre-gl'] },
-  server: { port: 5173 },
+  server: {
+    port: 5173,
+    // Forward /api/* calls to the Express server
+    proxy: { '/api': 'http://localhost:3001' },
+  },
 });

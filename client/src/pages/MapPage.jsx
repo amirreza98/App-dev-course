@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
+import { api } from '../api.js';
 
 // Tell MapLibre where its web worker (tile decoder) lives, so Vite can serve/bundle it
 maplibregl.setWorkerUrl(workerUrl);
@@ -19,6 +20,8 @@ const CITIES = {
 export default function MapPage() {
   const containerRef = useRef(null); // the <div> the map is drawn into
   const mapRef = useRef(null);       // the map object, so buttons can control it
+  const markersRef = useRef([]);     // the red pins currently on the map
+  const [places, setPlaces] = useState([]); // NEW in step 2: places saved on the server
 
   // Create the map once, when the page appears
   useEffect(() => {
@@ -51,9 +54,36 @@ export default function MapPage() {
       }
     });
 
+    // NEW: click on the map -> save a place on the server
+    map.on('click', async (e) => {
+      const name = window.prompt('Name this place:');
+      if (!name) return;
+      const place = await api('/places', {
+        method: 'POST',
+        body: { name, lng: e.lngLat.lng, lat: e.lngLat.lat },
+      });
+      setPlaces((prev) => [...prev, place]);
+    });
+
     mapRef.current = map;
     return () => map.remove(); // clean up when leaving the page
   }, []);
+
+  // NEW: load saved places from the server
+  useEffect(() => {
+    api('/places').then(setPlaces).catch(console.error);
+  }, []);
+
+  // NEW: draw a red marker for every place (runs again whenever `places` changes)
+  useEffect(() => {
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = places.map((p) =>
+      new maplibregl.Marker({ color: '#e63946' })
+        .setLngLat([p.lng, p.lat])
+        .setPopup(new maplibregl.Popup().setText(p.name))
+        .addTo(mapRef.current)
+    );
+  }, [places]);
 
   const flyTo = (center) =>
     mapRef.current.flyTo({ center, zoom: 16, pitch: 60, speed: 1.2 });
@@ -62,7 +92,7 @@ export default function MapPage() {
     <div className="map-layout">
       <aside className="panel">
         <h2>3D Map</h2>
-        <p className="hint">Drag with right mouse / Ctrl to rotate.</p>
+        <p className="hint">Drag with right mouse / Ctrl to rotate. Click the map to save a place.</p>
 
         <h3>Cities</h3>
         <div className="buttons">
@@ -70,6 +100,8 @@ export default function MapPage() {
             <button key={name} onClick={() => flyTo(center)}>{name}</button>
           ))}
         </div>
+
+        <p className="hint">📍 {places.length} saved place(s) — click a red pin to see its name.</p>
       </aside>
       <div ref={containerRef} className="map" />
     </div>

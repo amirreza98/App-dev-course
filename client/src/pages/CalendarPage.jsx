@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { api } from '../api.js';
 
 // Today as 'YYYY-MM-DD' (the format <input type="date"> uses)
 const today = () => new Date().toISOString().slice(0, 10);
@@ -10,20 +11,29 @@ export default function CalendarPage() {
   const [deadline, setDeadline] = useState(today());
   const [hours, setHours] = useState(3);
 
-  const addTask = (e) => {
+  // NEW in step 2: load the tasks from the server when the page opens
+  useEffect(() => {
+    api('/tasks').then(setTasks).catch(console.error);
+  }, []);
+
+  const addTask = async (e) => {
     e.preventDefault(); // don't reload the page
     if (!title.trim()) return;
-    const task = { id: Date.now(), title, deadline, hours: Number(hours) };
+    // NEW: send the task to the server; it answers with the saved task (incl. id)
+    const task = await api('/tasks', { method: 'POST', body: { title, deadline, hours } });
     setTasks([...tasks, task]); // new array = React notices the change
     setTitle('');
   };
 
-  const removeTask = (id) => setTasks(tasks.filter((t) => t.id !== id));
+  const removeTask = async (id) => {
+    await api(`/tasks/${id}`, { method: 'DELETE' });
+    setTasks(tasks.filter((t) => t.id !== id));
+  };
 
   return (
     <div className="simple-page">
       <h2>AI Calendar</h2>
-      <p className="hint">Step 1: tasks live only in the browser. Refresh the page and they are gone.</p>
+      <p className="hint">Step 2: tasks are saved on the server. Refresh — they stay!</p>
 
       <form className="card form" onSubmit={addTask}>
         <input
