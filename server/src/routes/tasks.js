@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { planTasks } from '../planner.js';
 
 const router = Router();
 
@@ -50,6 +51,22 @@ router.patch('/:id', (req, res) => {
 router.delete('/:id', (req, res) => {
   tasks = tasks.filter((t) => t.id !== Number(req.params.id));
   res.status(204).end();
+});
+
+// POST /api/tasks/plan -> build a schedule that spreads work out BEFORE the deadline.
+// Body: { maxHoursPerDay, useAi, today: 'YYYY-MM-DD' }
+router.post('/plan', async (req, res) => {
+  const maxHoursPerDay = Number(req.body?.maxHoursPerDay) || 4;
+  const useAi = Boolean(req.body?.useAi);
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(req.body?.today) ? req.body.today : undefined;
+  try {
+    const open = tasks.filter((t) => !t.done);
+    const plan = await planTasks(open, { maxHoursPerDay, useAi, today });
+    res.json(plan);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Planning failed' });
+  }
 });
 
 export default router;

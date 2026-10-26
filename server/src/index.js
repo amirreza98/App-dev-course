@@ -3,6 +3,9 @@ import cors from 'cors';
 import placesRouter from './routes/places.js';
 import tasksRouter from './routes/tasks.js';
 
+// Load server/.env if it exists (secrets like OPENAI_API_KEY live there)
+try { process.loadEnvFile(); } catch { /* no .env file – that's fine */ }
+
 const app = express();
 app.use(cors());
 app.use(express.json());

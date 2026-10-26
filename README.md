@@ -8,8 +8,8 @@ We build two apps **step by step, with our own hands**: a 🗺️ **3D Map** and
 | [0 · Your first React app](https://github.com/amirreza98/App-dev-course/tree/main#readme) | `main` | ~30 min |
 | [1 · React basics](https://github.com/amirreza98/App-dev-course/tree/step-1-react#readme) | `step-1-react` | ~60 min |
 | [2 · Backend](https://github.com/amirreza98/App-dev-course/tree/step-2-backend#readme) | `step-2-backend` | ~60 min |
-| [3 · Calendar](https://github.com/amirreza98/App-dev-course/tree/step-3-calendar#readme) **📍 you are here** | `step-3-calendar` | ~50 min |
-| [4 · Planner + AI](https://github.com/amirreza98/App-dev-course/tree/step-4-planner#readme) | `step-4-planner` | ~50 min |
+| [3 · Calendar](https://github.com/amirreza98/App-dev-course/tree/step-3-calendar#readme) | `step-3-calendar` | ~50 min |
+| [4 · Planner + AI](https://github.com/amirreza98/App-dev-course/tree/step-4-planner#readme) **📍 you are here** | `step-4-planner` | ~50 min |
 
 **How it works:** this page is the tutorial for this step. Follow it from top to bottom: copy each code block into your file → **save** → look at the browser. You keep working in your own code from step to step. The branch holds the **finished code** of the step – if you fall behind, catch up with `git checkout -f <branch> && npm install`.
 
@@ -31,489 +31,162 @@ npm run dev
 
 ---
 
-# Lesson 3 – Calendar: a month view with all deadlines
+# Lesson 4 – The planner: spreading work out (+ AI)
 
 | | |
 |---|---|
 | ⏱️ Time | ~50 min |
-| 🏁 Start from | your code from Lesson 2 (or `git checkout -f step-2-backend && npm install`) |
-| ✅ Finished result | branch `step-3-calendar` |
-| 🎯 You will | build a month calendar from scratch, show every deadline on it, and mark tasks as done |
+| 🏁 Start from | your code from Lesson 3 (or `git checkout -f step-3-calendar && npm install`) |
+| ✅ Finished result | branch `step-4-planner` |
+| 🎯 You will | write the algorithm that plans **when** to work on each task – in three versions – and connect an AI |
 
-> 🆘 **Stuck or behind?** Run `git checkout -f step-3-calendar && npm install` to get the finished code of this lesson.
+> 🆘 **Stuck or behind?** Run `git checkout -f step-4-planner && npm install` to get the finished app.
 
 ---
 
-## G1. ✍️ Server: priority, colour and "done"
+## 💡 Where does the planner live?
 
-Open **`server/src/routes/tasks.js`**.
+The planner is the **brain** of the app – the rules (*"max 4 hours per day"*). We put it on the **server**:
 
-**1.** Under `const router = Router();`, add two lists:
+- the frontend stays simple: it only **shows** the plan
+- the rules live in one place (a phone app could use the same server later)
+- the secret AI key (Part K) must **never** be in the browser, where anyone can read it
 
-```js
-const COLORS = ['#4361ee', '#e63946', '#2a9d8f', '#f4a261', '#9b5de5', '#06aed5', '#e76f51', '#588157'];
-const PRIORITIES = ['low', 'medium', 'high'];
+The plan the server sends back looks like this:
+
+```json
+{
+  "source": "rule-based",
+  "days": {
+    "2026-10-26": [{ "taskId": 1, "title": "Thesis", "hours": 1.5 }],
+    "2026-10-27": [{ "taskId": 1, "title": "Thesis", "hours": 1.5 }]
+  },
+  "atRisk": []
+}
 ```
 
-**2.** Replace the `POST` route with:
+---
+
+# Part I – Show a plan on the calendar
+
+## I1. ✍️ Planner version 1: panic mode 😱
+
+Create **`server/src/planner.js`**:
 
 ```js
-// POST /api/tasks -> create a task. Body: { title, deadline, hours, priority }
-router.post('/', (req, res) => {
-  const { title, deadline, hours, priority = 'medium' } = req.body;
-  if (!title || !deadline || !hours) {
-    return res.status(400).json({ error: 'title, deadline and hours are required' });
+// Planner for the AI Calendar.
+// Idea: people who procrastinate need the work split into small sessions
+// that start NOW and finish a day BEFORE the deadline (buffer day).
+
+const toDateStr = (d) => d.toISOString().slice(0, 10);
+
+// Version 1: the "panic" planner – do everything today!
+export function ruleBasedPlan(tasks, { today: todayStr } = {}) {
+  const today = todayStr || toDateStr(new Date());
+  const days = {};
+  for (const task of tasks) {
+    (days[today] ||= []).push({ taskId: task.id, title: task.title, hours: task.hours });
   }
-  const id = nextId++;
-  const task = {
-    id,
-    title,
-    deadline,
-    hours: Number(hours),
-    priority: PRIORITIES.includes(priority) ? priority : 'medium',
-    color: COLORS[(id - 1) % COLORS.length],
-    done: false,
-  };
-  tasks.push(task);
-  res.status(201).json(task);
-});
-```
-
-**3.** Add a new route **above** the `DELETE` route:
-
-```js
-// PATCH /api/tasks/:id -> change some fields, e.g. { done: true } or { priority: 'high' }
-router.patch('/:id', (req, res) => {
-  const task = tasks.find((t) => t.id === Number(req.params.id));
-  if (!task) return res.status(404).json({ error: 'Task not found' });
-  const { title, deadline, hours, priority, done } = req.body;
-  if (title !== undefined) task.title = title;
-  if (deadline !== undefined) task.deadline = deadline;
-  if (hours !== undefined) task.hours = Number(hours);
-  if (PRIORITIES.includes(priority)) task.priority = priority;
-  if (done !== undefined) task.done = Boolean(done);
-  res.json(task);
-});
-```
-
-The server restarted by itself (and forgot all tasks – memory!). Add a task in the app, then open **http://localhost:3001/api/tasks**.
-👀 **You see:** the task now also has `"priority"`, `"color"` and `"done": false`.
-
-### 💡 What's new?
-
-- `priority = 'medium'` – a **default value**: if the frontend sends no priority, use `'medium'`
-- `COLORS[(id - 1) % COLORS.length]` – each task gets the next colour. `%` (modulo) is the remainder of a division, so after colour 8 we start again at 1
-- **`PATCH`** = *change some fields* of something that exists. We'll use it to tick a task as done: `PATCH /api/tasks/3` with `{ "done": true }`
-- `.find()` returns the first task with that id (or `undefined` → `404 Not Found`)
-
----
-
-## G2. ✍️ Date helpers
-
-Dates are tricky. We keep all date code in one file. Create the folder **`client/src/utils`** and the file **`client/src/utils/dates.js`**:
-
-```js
-// Date helpers that work with 'YYYY-MM-DD' strings in the user's LOCAL time zone.
-
-const pad = (n) => String(n).padStart(2, '0');
-
-export const toYMD = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
-export const fromYMD = (s) => {
-  const [y, m, d] = s.split('-').map(Number);
-  return new Date(y, m - 1, d);
-};
-
-export const todayYMD = () => toYMD(new Date());
-
-export const addDays = (ymd, n) => {
-  const d = fromYMD(ymd);
-  d.setDate(d.getDate() + n);
-  return toYMD(d);
-};
-
-export const daysBetween = (fromYmd, toYmd) =>
-  Math.round((fromYMD(toYmd) - fromYMD(fromYmd)) / 86_400_000);
-
-// All cells for a month grid, weeks starting on Monday (6 rows x 7 days)
-export function monthGrid(year, month) {
-  const first = new Date(year, month, 1);
-  const offset = (first.getDay() + 6) % 7; // Monday = 0
-  const start = new Date(year, month, 1 - offset);
-  return Array.from({ length: 42 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    return { ymd: toYMD(d), day: d.getDate(), inMonth: d.getMonth() === month };
-  });
+  return { source: 'rule-based', days, atRisk: [] };
 }
 
-export const formatLong = (ymd) =>
-  fromYMD(ymd).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
-
-export const relative = (ymd) => {
-  const n = daysBetween(todayYMD(), ymd);
-  if (n < 0) return `${-n}d overdue`;
-  if (n === 0) return 'today';
-  if (n === 1) return 'tomorrow';
-  return `in ${n} days`;
-};
-```
-
-Nothing changes on screen – these are tools for the next blocks. The important ones:
-
-| Function | Example | Result |
-|---|---|---|
-| `todayYMD()` | | `'2026-10-26'` |
-| `addDays(ymd, n)` | `addDays('2026-10-30', 3)` | `'2026-11-02'` |
-| `relative(ymd)` | a date 3 days from now | `'in 3 days'` |
-| `formatLong(ymd)` | `'2026-10-26'` | `'Monday, October 26'` |
-| `monthGrid(year, month)` | October 2026 | the 42 boxes of the calendar (next block) |
-
-💡 We store dates as text `'YYYY-MM-DD'`: easy to compare and sort (`'2026-10-29' < '2026-11-01'` is `true`).
-⚠️ JavaScript quirk: `getMonth()` counts from **0** (January = 0). That's why you see `+ 1` and `- 1`.
-
-### 💡 How `monthGrid` works
-
-A month calendar always shows **6 weeks × 7 days = 42 boxes**, starting on a Monday:
-
-```
-October 2026 – the 1st is a Thursday → go back 3 days → start on Mon 28 Sept
-Mon Tue Wed Thu Fri Sat Sun
- 28  29  30   1   2   3   4
-  5   6   7   8 …
-```
-
-For each of the 42 days it returns `{ ymd: '2026-09-28', day: 28, inMonth: false }`. `inMonth` tells us whether to show it grey.
-
----
-
-## G3. ✍️ A calendar component
-
-The calendar is a big piece, so it gets **its own component in its own file**. Create the folder **`client/src/components`** and the file **`client/src/components/MonthCalendar.jsx`**:
-
-```jsx
-import { monthGrid } from '../utils/dates.js';
-
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-export default function MonthCalendar({ month }) {
-  const year = month.getFullYear();
-  const m = month.getMonth();
-  const cells = monthGrid(year, m);
-
-  const title = month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-
-  return (
-    <div className="cal">
-      <div className="cal-header">
-        <h3>{title}</h3>
-      </div>
-
-      <div className="cal-grid">
-        {WEEKDAYS.map((w) => <div key={w} className="cal-weekday">{w}</div>)}
-
-        {cells.map(({ ymd, day, inMonth }) => (
-          <div key={ymd} className={inMonth ? 'cal-cell' : 'cal-cell muted'}>
-            <div className="cal-day">
-              <span>{day}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+export async function planTasks(tasks, options) {
+  return ruleBasedPlan(tasks, options);
 }
 ```
 
-Now use it on the calendar page, in a two-column layout. Open **`client/src/pages/CalendarPage.jsx`**:
+The simplest possible plan: **everything today**. It's terrible – that's the point. We'll improve it step by step.
 
-**1.** Import it at the top:
-
-```jsx
-import MonthCalendar from '../components/MonthCalendar.jsx';
-```
-
-**2.** Change the outer `<div className="simple-page">` to `<div className="cal-page">`, and wrap everything that's inside it in a `<section className="cal-side">`. Then add a second section with the calendar. The JSX should have this shape:
-
-```jsx
-  return (
-    <div className="cal-page">
-      {/* ---------- Left column ---------- */}
-      <section className="cal-side">
-        {/* ...everything that was there before: h2, hint, form, h3, list... */}
-      </section>
-
-      {/* ---------- Right column ---------- */}
-      <section className="cal-main">
-        <MonthCalendar month={new Date()} />
-      </section>
-    </div>
-  );
-```
-
-👀 **You see:** tasks on the left, a calendar of the current month on the right!
-
-### 💡 Props: giving data to a component
-
-```jsx
-<MonthCalendar month={new Date()} />
-```
-
-```jsx
-export default function MonthCalendar({ month }) {
-```
-
-`month={...}` is a **prop** (property). It works like an argument to a function: the page gives data **down** to the calendar. The calendar uses it to know which month to draw.
-
-🧱 Components are LEGO bricks – props are how they connect.
-
----
-
-## G4. ✍️ Switch months
-
-The page should **remember** which month is shown – that's state. And the calendar needs a way to **tell** the page *"go to the next month"*.
-
-**In `CalendarPage.jsx`:** add a state under the other `useState` lines, and pass two props:
-
-```jsx
-  const [month, setMonth] = useState(() => new Date()); // which month the calendar shows
-```
-
-```jsx
-        <MonthCalendar month={month} onMonthChange={setMonth} />
-```
-
-**In `MonthCalendar.jsx`:**
-
-**1.** Accept the new prop:
-
-```jsx
-export default function MonthCalendar({ month, onMonthChange }) {
-```
-
-**2.** Above `const title = ...`, add:
-
-```jsx
-  const shift = (n) => onMonthChange(new Date(year, m + n, 1));
-```
-
-**3.** Replace the `cal-header` div with:
-
-```jsx
-      <div className="cal-header">
-        <button onClick={() => shift(-1)}>‹</button>
-        <h3>{title}</h3>
-        <button onClick={() => shift(1)}>›</button>
-        <button className="ghost" onClick={() => onMonthChange(new Date())}>
-          Today
-        </button>
-      </div>
-```
-
-👀 **You see:** **‹** and **›** switch months, **Today** jumps back.
-
-### 💡 A function as a prop
-
-`onMonthChange={setMonth}` – we pass a **function** down. When you click **›**:
-
-```
-calendar: shift(1) → onMonthChange(November) → page: setMonth(November) → page redraws → calendar gets month = November
-```
-
-The state lives in the **page**, the calendar just shows it and reports clicks. This is called **lifting state up** – the page will need `month` again soon.
-
-`new Date(year, m + 1, 1)` – JavaScript is smart: month 12 automatically becomes January of the next year.
-
----
-
-## G5. ✍️ Deadlines on the calendar
-
-The calendar doesn't want a *list of tasks*. It wants to know *"what happens on each day?"*:
+Now add a route. In **`server/src/routes/tasks.js`**, import the planner at the top:
 
 ```js
-// tasks (what we store)                       events (what the calendar needs)
-[{ title: 'Exam', deadline: '2026-10-29' }]  →  { '2026-10-29': [{ label: 'Exam', ... }] }
+import { planTasks } from '../planner.js';
 ```
 
-**In `CalendarPage.jsx`:**
+and add this route **at the end**, just above `export default router;`:
 
-**1.** Add `useMemo` to the React import:
-
-```jsx
-import { useEffect, useMemo, useState } from 'react';
+```js
+// POST /api/tasks/plan -> build a schedule that spreads work out BEFORE the deadline.
+// Body: { maxHoursPerDay, useAi, today: 'YYYY-MM-DD' }
+router.post('/plan', async (req, res) => {
+  const maxHoursPerDay = Number(req.body?.maxHoursPerDay) || 4;
+  const useAi = Boolean(req.body?.useAi);
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(req.body?.today) ? req.body.today : undefined;
+  try {
+    const open = tasks.filter((t) => !t.done);
+    const plan = await planTasks(open, { maxHoursPerDay, useAi, today });
+    res.json(plan);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Planning failed' });
+  }
+});
 ```
 
-**2.** Just **before** `return (`, add:
+- only **open** tasks are planned – done tasks need no more time
+- `today` comes from the browser, so the user's time zone is used
+- `?.` means *"if `body` is missing, don't crash – just give `undefined`"*
+- `/^\d{4}-\d{2}-\d{2}$/` is a **regular expression**: a pattern that checks the text looks like `2026-10-26`
+- `maxHoursPerDay` and `useAi` aren't used yet – soon!
+- `try { … } catch (err) { … }` – if anything inside crashes, send a `500` instead of killing the server
+
+Nothing visible yet – next block!
+
+---
+
+## I2. ✍️ Show work sessions on the calendar
+
+**In `client/src/components/MonthCalendar.jsx`** – the calendar learns a second kind of event: `kind: 'session'` (a planned work block).
+
+**1.** Inside each day, under `const list = ...`, add up the planned hours:
 
 ```jsx
-  // Turn tasks into calendar events: { 'YYYY-MM-DD': [event, ...] }
-  const events = useMemo(() => {
-    const ev = {};
-    for (const t of tasks) {
-      (ev[t.deadline] ||= []).push({
-        key: `d-${t.id}`, kind: 'deadline', label: t.title, color: t.color, done: t.done, task: t,
-      });
-    }
-    return ev;
-  }, [tasks]);
+          const hours = list.filter((e) => e.kind === 'session').reduce((s, e) => s + e.hours, 0);
 ```
 
-**3.** Pass it to the calendar:
+**2.** Show them next to the day number:
 
 ```jsx
-        <MonthCalendar month={month} onMonthChange={setMonth} events={events} />
-```
-
-**In `MonthCalendar.jsx`:**
-
-**1.** Under `WEEKDAYS`, add `const MAX_CHIPS = 3;` and accept the prop: `({ month, onMonthChange, events })`
-
-**2.** Replace the `cells.map(...)` part with:
-
-```jsx
-        {cells.map(({ ymd, day, inMonth }) => {
-          const list = events[ymd] || [];
-
-          return (
-            <div key={ymd} className={inMonth ? 'cal-cell' : 'cal-cell muted'}>
               <div className="cal-day">
                 <span>{day}</span>
+                {hours > 0 && <span className="cal-hours">{hours}h</span>}
               </div>
-              {list.slice(0, MAX_CHIPS).map((e) => (
-                <div
-                  key={e.key}
-                  className={`chip deadline ${e.done ? 'done' : ''}`}
-                  style={{ background: e.color }}
-                  title={e.label}
-                >
-                  🏁 {e.label}
-                </div>
-              ))}
-              {list.length > MAX_CHIPS && <div className="chip more">+{list.length - MAX_CHIPS} more</div>}
-            </div>
-          );
-        })}
 ```
 
-👀 **You see:** add a task → a coloured **🏁 chip** appears on its deadline day! Try a deadline next month, then click **›**.
+**3.** Replace the chip `<div>` – deadlines stay filled with colour, sessions get a light background with a coloured edge:
 
-### 💡 What's new?
+```jsx
+                <div
+                  key={e.key}
+                  className={`chip ${e.kind} ${e.done ? 'done' : ''}`}
+                  style={e.kind === 'deadline'
+                    ? { background: e.color }
+                    : { borderLeftColor: e.color, background: e.color + '22' }}
+                  title={e.label}
+                >
+                  {e.kind === 'deadline' ? '🏁 ' : ''}{e.label}
+                </div>
+```
 
-- **Derived data:** `events` is *calculated* from `tasks`, not stored separately. One source of truth
-- **`useMemo`** remembers the result and only recalculates when `tasks` changes
-- `(ev[t.deadline] ||= [])` – *"if this day has no list yet, create an empty one"*, then `.push` into it
-- `events[ymd] || []` – the events of this day, or an empty list
-- `style={{ background: e.color }}` – a style from JavaScript. Two `{{ }}`: one for "JavaScript here", one for the object
-- `list.slice(0, 3)` – show max 3 chips, the rest becomes *"+2 more"*
+(`e.color + '22'` adds transparency to the colour: `#4361ee` → `#4361ee22`)
+
+**4.** Above `const title = ...`, add:
+
+```jsx
+  const hasSessions = Object.values(events).some((list) => list.some((e) => e.kind === 'session'));
+```
+
+and after the closing `</div>` of `cal-grid`, a small legend:
+
+```jsx
+      <div className="cal-legend">
+        <span><i className="dot deadline" /> Deadline</span>
+        {hasSessions && <span><i className="dot session" /> Planned work session</span>}
+      </div>
+```
 
 <details>
-<summary>📄 <code>MonthCalendar.jsx</code> so far</summary>
-
-```jsx
-import { monthGrid } from '../utils/dates.js';
-
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const MAX_CHIPS = 3;
-
-export default function MonthCalendar({ month, onMonthChange, events }) {
-  const year = month.getFullYear();
-  const m = month.getMonth();
-  const cells = monthGrid(year, m);
-
-  const shift = (n) => onMonthChange(new Date(year, m + n, 1));
-  const title = month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-
-  return (
-    <div className="cal">
-      <div className="cal-header">
-        <button onClick={() => shift(-1)}>‹</button>
-        <h3>{title}</h3>
-        <button onClick={() => shift(1)}>›</button>
-        <button className="ghost" onClick={() => onMonthChange(new Date())}>
-          Today
-        </button>
-      </div>
-
-      <div className="cal-grid">
-        {WEEKDAYS.map((w) => <div key={w} className="cal-weekday">{w}</div>)}
-
-        {cells.map(({ ymd, day, inMonth }) => {
-          const list = events[ymd] || [];
-
-          return (
-            <div key={ymd} className={inMonth ? 'cal-cell' : 'cal-cell muted'}>
-              <div className="cal-day">
-                <span>{day}</span>
-              </div>
-              {list.slice(0, MAX_CHIPS).map((e) => (
-                <div
-                  key={e.key}
-                  className={`chip deadline ${e.done ? 'done' : ''}`}
-                  style={{ background: e.color }}
-                  title={e.label}
-                >
-                  🏁 {e.label}
-                </div>
-              ))}
-              {list.length > MAX_CHIPS && <div className="chip more">+{list.length - MAX_CHIPS} more</div>}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-```
-</details>
-
----
-
-## G6. ✍️ Click a day, highlight today
-
-**In `CalendarPage.jsx`:**
-
-**1.** Import two date helpers:
-
-```jsx
-import { formatLong, todayYMD } from '../utils/dates.js';
-```
-
-**2.** Add a state for the clicked day (under `month`):
-
-```jsx
-  const [selected, setSelected] = useState(todayYMD()); // which day is clicked
-```
-
-**3.** Before `return (`, after the `events` block:
-
-```jsx
-  const dayEvents = events[selected] || [];
-```
-
-**4.** Replace the `<MonthCalendar ... />` line with the calendar **plus** a details box:
-
-```jsx
-        <MonthCalendar
-          month={month}
-          onMonthChange={setMonth}
-          events={events}
-          selected={selected}
-          onSelect={setSelected}
-        />
-
-        <div className="card day-details">
-          <h3>{formatLong(selected)}</h3>
-          {!dayEvents.length && <p className="hint">No deadlines this day.</p>}
-          {dayEvents.map((e) => (
-            <div key={e.key} className="day-item">
-              <i className="dot" style={{ background: e.color }} />
-              <span><b>🏁 Deadline:</b> {e.label} {e.done && '✅'}</span>
-            </div>
-          ))}
-        </div>
-```
-
-**In `MonthCalendar.jsx`:** replace the **whole file** with the final version:
+<summary>✅ <b>Checkpoint:</b> <code>MonthCalendar.jsx</code> (final version)</summary>
 
 ```jsx
 import { monthGrid, todayYMD } from '../utils/dates.js';
@@ -523,7 +196,7 @@ const MAX_CHIPS = 3;
 
 /**
  * Month view.
- * events: { 'YYYY-MM-DD': [{ key, label, color, done }] }
+ * events: { 'YYYY-MM-DD': [{ key, label, color, kind: 'deadline' | 'session', done }] }
  */
 export default function MonthCalendar({ month, onMonthChange, events, selected, onSelect }) {
   const year = month.getFullYear();
@@ -533,6 +206,7 @@ export default function MonthCalendar({ month, onMonthChange, events, selected, 
 
   const shift = (n) => onMonthChange(new Date(year, m + n, 1));
   const title = month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const hasSessions = Object.values(events).some((list) => list.some((e) => e.kind === 'session'));
 
   return (
     <div className="cal">
@@ -550,6 +224,7 @@ export default function MonthCalendar({ month, onMonthChange, events, selected, 
 
         {cells.map(({ ymd, day, inMonth }) => {
           const list = events[ymd] || [];
+          const hours = list.filter((e) => e.kind === 'session').reduce((s, e) => s + e.hours, 0);
           const classes = [
             'cal-cell',
             !inMonth && 'muted',
@@ -562,15 +237,18 @@ export default function MonthCalendar({ month, onMonthChange, events, selected, 
             <div key={ymd} className={classes} onClick={() => onSelect(ymd)}>
               <div className="cal-day">
                 <span>{day}</span>
+                {hours > 0 && <span className="cal-hours">{hours}h</span>}
               </div>
               {list.slice(0, MAX_CHIPS).map((e) => (
                 <div
                   key={e.key}
-                  className={`chip deadline ${e.done ? 'done' : ''}`}
-                  style={{ background: e.color }}
+                  className={`chip ${e.kind} ${e.done ? 'done' : ''}`}
+                  style={e.kind === 'deadline'
+                    ? { background: e.color }
+                    : { borderLeftColor: e.color, background: e.color + '22' }}
                   title={e.label}
                 >
-                  🏁 {e.label}
+                  {e.kind === 'deadline' ? '🏁 ' : ''}{e.label}
                 </div>
               ))}
               {list.length > MAX_CHIPS && <div className="chip more">+{list.length - MAX_CHIPS} more</div>}
@@ -578,38 +256,92 @@ export default function MonthCalendar({ month, onMonthChange, events, selected, 
           );
         })}
       </div>
+
+      <div className="cal-legend">
+        <span><i className="dot deadline" /> Deadline</span>
+        {hasSessions && <span><i className="dot session" /> Planned work session</span>}
+      </div>
     </div>
   );
 }
 ```
+</details>
 
-What changed in the calendar:
-- new props `selected` and `onSelect`
-- every day box has `onClick={() => onSelect(ymd)}` → tells the page which day was clicked
-- **Today** also selects today
-- the CSS classes are built from a list:
+**In `client/src/pages/CalendarPage.jsx`:**
+
+**1.** Add a state for the plan, under `selected`:
 
 ```jsx
-const classes = [
-  'cal-cell',
-  !inMonth && 'muted',          // grey if not in this month
-  ymd < today && 'past',        // faded if in the past
-  ymd === today && 'today',     // dark border
-  ymd === selected && 'selected', // light blue
-].filter(Boolean).join(' ');    // e.g. "cal-cell today selected"
+  const [plan, setPlan] = useState({ source: '', days: {}, atRisk: [] });
 ```
 
-Each line is a class name **or** `false`. `.filter(Boolean)` removes the `false`s, `.join(' ')` glues the rest together.
+**2.** Under the "Load tasks once" effect, ask for a plan **whenever the tasks change**:
 
-👀 **You see:** today has a dark border. Click a day → it turns light blue, and the box below shows its date and deadlines.
+```jsx
+  // Ask the server for a plan whenever the tasks change
+  useEffect(() => {
+    api('/tasks/plan', { method: 'POST', body: { today: todayYMD() } })
+      .then(setPlan)
+      .catch(console.error);
+  }, [tasks]);
+```
 
-💡 `selected` lives in the **page**, because **two** things need it: the calendar (highlight) and the details box. *Put state in the closest parent that needs it.*
+**3.** Replace the whole `events` block with this version, which adds the sessions:
 
----
+```jsx
+  // ---- Turn tasks + plan into calendar events ----
+  const taskById = useMemo(() => Object.fromEntries(tasks.map((t) => [t.id, t])), [tasks]);
 
-## G7. ✍️ Priority, done checkbox and stats
+  const events = useMemo(() => {
+    const ev = {};
+    for (const t of tasks) {
+      (ev[t.deadline] ||= []).push({
+        key: `d-${t.id}`, kind: 'deadline', label: t.title, color: t.color, done: t.done, task: t,
+      });
+    }
+    for (const [day, sessions] of Object.entries(plan.days)) {
+      // Merge several sessions of the same task on one day into one entry
+      const perTask = {};
+      for (const s of sessions) {
+        perTask[s.taskId] ||= { ...s, hours: 0, count: 0 };
+        perTask[s.taskId].hours += s.hours;
+        perTask[s.taskId].count += 1;
+      }
+      for (const s of Object.values(perTask)) {
+        const t = taskById[s.taskId];
+        (ev[day] ||= []).push({
+          key: `s-${day}-${s.taskId}`, kind: 'session', label: `${s.title} · ${s.hours}h`,
+          hours: s.hours, count: s.count, color: t?.color || '#888', task: t,
+        });
+      }
+    }
+    return ev;
+  }, [tasks, plan, taskById]);
+```
 
-The page is growing. Replace the **whole** **`client/src/pages/CalendarPage.jsx`** with:
+**4.** In the day-details box, replace the lines from `{!dayEvents.length && ...}` down to the "Next step" hint with:
+
+```jsx
+          {!dayEvents.length && <p className="hint">Nothing planned. Free day 🎉</p>}
+          {dayEvents.map((e) => (
+            <div key={e.key} className="day-item">
+              <i className="dot" style={{ background: e.color }} />
+              {e.kind === 'deadline'
+                ? <span><b>🏁 Deadline:</b> {e.label} {e.done && '✅'}</span>
+                : <span>Work on <b>{e.task?.title}</b> for {e.hours}h
+                    {e.count > 1 && <span className="hint"> ({e.count} sessions, take a break between)</span>}</span>}
+            </div>
+          ))}
+```
+
+**5.** Change the hint under the `<h2>`:
+
+```jsx
+        <p className="hint">Add tasks — your work gets spread out before every deadline.</p>
+```
+
+<details>
+<summary>📄 Full <code>CalendarPage.jsx</code> so far</summary>
 
 ```jsx
 import { useEffect, useMemo, useState } from 'react';
@@ -624,11 +356,19 @@ export default function CalendarPage() {
   const [form, setForm] = useState(emptyForm);
   const [month, setMonth] = useState(() => new Date()); // which month the calendar shows
   const [selected, setSelected] = useState(todayYMD()); // which day is clicked
+  const [plan, setPlan] = useState({ source: '', days: {}, atRisk: [] });
 
   // Load tasks once
   useEffect(() => {
     api('/tasks').then(setTasks).catch(console.error);
   }, []);
+
+  // Ask the server for a plan whenever the tasks change
+  useEffect(() => {
+    api('/tasks/plan', { method: 'POST', body: { today: todayYMD() } })
+      .then(setPlan)
+      .catch(console.error);
+  }, [tasks]);
 
   // ---- Task actions ----
   const addTask = async (e) => {
@@ -654,7 +394,9 @@ export default function CalendarPage() {
     setSelected(ymd);
   };
 
-  // ---- Turn tasks into calendar events: { 'YYYY-MM-DD': [event, ...] } ----
+  // ---- Turn tasks + plan into calendar events ----
+  const taskById = useMemo(() => Object.fromEntries(tasks.map((t) => [t.id, t])), [tasks]);
+
   const events = useMemo(() => {
     const ev = {};
     for (const t of tasks) {
@@ -662,8 +404,24 @@ export default function CalendarPage() {
         key: `d-${t.id}`, kind: 'deadline', label: t.title, color: t.color, done: t.done, task: t,
       });
     }
+    for (const [day, sessions] of Object.entries(plan.days)) {
+      // Merge several sessions of the same task on one day into one entry
+      const perTask = {};
+      for (const s of sessions) {
+        perTask[s.taskId] ||= { ...s, hours: 0, count: 0 };
+        perTask[s.taskId].hours += s.hours;
+        perTask[s.taskId].count += 1;
+      }
+      for (const s of Object.values(perTask)) {
+        const t = taskById[s.taskId];
+        (ev[day] ||= []).push({
+          key: `s-${day}-${s.taskId}`, kind: 'session', label: `${s.title} · ${s.hours}h`,
+          hours: s.hours, count: s.count, color: t?.color || '#888', task: t,
+        });
+      }
+    }
     return ev;
-  }, [tasks]);
+  }, [tasks, plan, taskById]);
 
   // ---- Stats ----
   const open = tasks.filter((t) => !t.done);
@@ -679,7 +437,7 @@ export default function CalendarPage() {
       {/* ---------- Left column ---------- */}
       <section className="cal-side">
         <h2>AI Calendar</h2>
-        <p className="hint">Step 3: every deadline appears on the calendar.</p>
+        <p className="hint">Add tasks — your work gets spread out before every deadline.</p>
 
         <form className="card form" onSubmit={addTask}>
           <input
@@ -751,234 +509,772 @@ export default function CalendarPage() {
 
         <div className="card day-details">
           <h3>{formatLong(selected)}</h3>
-          {!dayEvents.length && <p className="hint">No deadlines this day.</p>}
+          {!dayEvents.length && <p className="hint">Nothing planned. Free day 🎉</p>}
           {dayEvents.map((e) => (
             <div key={e.key} className="day-item">
               <i className="dot" style={{ background: e.color }} />
-              <span><b>🏁 Deadline:</b> {e.label} {e.done && '✅'}</span>
+              {e.kind === 'deadline'
+                ? <span><b>🏁 Deadline:</b> {e.label} {e.done && '✅'}</span>
+                : <span>Work on <b>{e.task?.title}</b> for {e.hours}h
+                    {e.count > 1 && <span className="hint"> ({e.count} sessions, take a break between)</span>}</span>}
             </div>
           ))}
-          <p className="hint">Next step: plan <i>when</i> to work on each task, so it's not all left for the last day.</p>
         </div>
       </section>
     </div>
   );
 }
 ```
+</details>
 
-👀 **You see:**
-- a **Priority** dropdown; each task shows a coloured dot and a priority badge
-- a **checkbox**: tick it → the task is crossed out in the list **and** on the calendar
-- **stats**: open tasks, hours of work left, done
-- click a task → the calendar **jumps** to its deadline (try one in another month!)
+Now add two tasks: **Thesis chapter – 8h – due in 6 days**, and **Exam prep – 5h – due in 3 days**.
 
-### 💡 What's new? (read the file from top to bottom with these notes)
+👀 **You see:** today says **13h**. Both tasks, all today. 😱 Panic mode works – and it's exactly what a procrastinator does the night before.
 
-**One state object for the whole form** – instead of 4 separate `useState`s:
+### 💡 What's new?
 
-```jsx
-const emptyForm = () => ({ title: '', deadline: addDays(todayYMD(), 7), hours: 3, priority: 'medium' });
-const [form, setForm] = useState(emptyForm);
-
-<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-```
-
-`{ ...form, title: 'new' }` = *"copy all fields, but replace `title`"*. The default deadline is now one week ahead.
-
-**Changing one task with `PATCH`:**
-
-```jsx
-const updateTask = async (id, changes) => {
-  const updated = await api(`/tasks/${id}`, { method: 'PATCH', body: changes });
-  setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
-};
-
-<input type="checkbox" checked={t.done} onChange={() => updateTask(t.id, { done: !t.done })} />
-```
-
-`prev.map((t) => (t.id === id ? updated : t))` – *"go through all tasks; use the new version for the changed one, keep the others"*. `!t.done` flips `true` ↔ `false`.
-
-**Stats are just calculations on the list:**
-
-```jsx
-const open = tasks.filter((t) => !t.done);
-const totalHours = open.reduce((s, t) => s + t.hours, 0);
-const nextDeadline = [...open].sort((a, b) => a.deadline.localeCompare(b.deadline))[0];
-```
-
-**Click a task → jump there:**
-
-```jsx
-const showDay = (ymd) => {
-  setMonth(fromYMD(ymd));   // show the right month
-  setSelected(ymd);         // highlight the day
-};
-```
-
-This is why `month` and `selected` live in the page: the **task list** can now control the calendar too.
+- `useEffect(..., [tasks])` – runs again **every time the tasks change**: add, delete, tick done → new plan
+- `taskById` – a quick lookup *id → task*, to find each session's colour
+- the server may plan several sessions of the same task on one day; we merge them into one chip (*"Thesis · 3h"*)
 
 ---
 
-## G8. ✍️ Map: a list of saved places
+# Part J – A smarter algorithm, in three versions
 
-Back to the map! Open **`client/src/pages/MapPage.jsx`**.
+An **algorithm** is a recipe: clear steps that always lead to a result. We improve our recipe twice. Keep the two tasks from I2 – you'll see the calendar change after every version.
 
-**1.** After the `flyTo` function, add:
+## J1. ✍️ Version 2: max hours per day
 
-```jsx
-  // NEW in step 3: delete a saved place
-  const removePlace = async (id) => {
-    await api(`/places/${id}`, { method: 'DELETE' });
-    setPlaces((prev) => prev.filter((p) => p.id !== id));
+Replace **everything** in **`server/src/planner.js`** with:
+
+```js
+// Planner for the AI Calendar.
+// Idea: people who procrastinate need the work split into small sessions
+// that start NOW and finish a day BEFORE the deadline (buffer day).
+
+const SESSION_HOURS = 1.5; // max length of one work session
+const toDateStr = (d) => d.toISOString().slice(0, 10);
+
+// Version 2: max hours per day, fill the days from today on
+export function ruleBasedPlan(tasks, { maxHoursPerDay = 4, today: todayStr } = {}) {
+  const days = {};
+  const atRisk = [];
+  const used = {}; // hours already booked per day
+
+  // "today" comes from the browser so the user's time zone is respected
+  const today = new Date((todayStr || toDateStr(new Date())) + 'T00:00:00Z');
+
+  // Earliest deadline first
+  const sorted = [...tasks].sort((a, b) => a.deadline.localeCompare(b.deadline));
+
+  for (const task of sorted) {
+    let remaining = task.hours;
+    const lastWorkDay = new Date(task.deadline + 'T00:00:00Z');
+    lastWorkDay.setUTCDate(lastWorkDay.getUTCDate() - 1); // 1 buffer day
+
+    for (let d = new Date(today); d <= lastWorkDay && remaining > 0; d.setUTCDate(d.getUTCDate() + 1)) {
+      const key = toDateStr(d);
+      // Book sessions on this day until the day is full or the task is done
+      while (remaining > 0 && (used[key] || 0) < maxHoursPerDay) {
+        const hours = Math.min(SESSION_HOURS, remaining, maxHoursPerDay - (used[key] || 0));
+        (days[key] ||= []).push({ taskId: task.id, title: task.title, hours });
+        used[key] = (used[key] || 0) + hours;
+        remaining -= hours;
+      }
+    }
+
+    if (remaining > 0) {
+      atRisk.push({ taskId: task.id, title: task.title, missingHours: remaining });
+    }
+  }
+
+  return { source: 'rule-based', days, atRisk };
+}
+
+export async function planTasks(tasks, options) {
+  return ruleBasedPlan(tasks, options);
+}
+```
+
+The server restarts and forgets the tasks – add the same two again.
+
+👀 **You see:** max **4h** per day, filled from today on. Exam prep is done first (earliest deadline), then Thesis.
+
+### 💡 How it works
+
+1. **Sort:** earliest deadline first
+2. For each task: go day by day, from today until the day **before** the deadline (one buffer day, in case something goes wrong)
+3. On each day, book sessions of max **1.5h** until the day is full (**4h**) or the task is done
+4. Hours left over at the end → the task is **at risk**
+
+- `used` remembers how many hours each day already has
+- `while (...)` repeats as long as the condition is true
+- `Math.min(a, b, c)` – the smallest of the three: the session can't be longer than 1.5h, than what's left of the task, or than what's left of the day
+
+🤔 Better than panic mode! But look: the Thesis is **finished days before** its deadline, and the first days are packed. Exhausting. Can we spread the work **evenly**?
+
+---
+
+## J2. ✍️ Version 3: spread evenly
+
+Replace **everything** in **`server/src/planner.js`** with:
+
+```js
+// Planner for the AI Calendar.
+// Idea: people who procrastinate need the work split into small sessions
+// that start NOW and finish a day BEFORE the deadline (buffer day).
+
+const SESSION_HOURS = 1.5; // max length of one work session
+const toDateStr = (d) => d.toISOString().slice(0, 10);
+
+/**
+ * Rule-based planner (works without any API key).
+ * Returns { source, days: { 'YYYY-MM-DD': [{ taskId, title, hours }] }, atRisk: [...] }
+ */
+const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
+
+export function ruleBasedPlan(tasks, { maxHoursPerDay = 4, today: todayStr } = {}) {
+  const days = {};
+  const atRisk = [];
+  const used = {}; // hours already booked per day
+
+  // "today" comes from the browser so the user's time zone is respected
+  const today = new Date((todayStr || toDateStr(new Date())) + 'T00:00:00Z');
+
+  // Earliest deadline first; on the same deadline, higher priority first
+  const sorted = [...tasks].sort(
+    (a, b) =>
+      a.deadline.localeCompare(b.deadline) ||
+      (PRIORITY_RANK[a.priority] ?? 1) - (PRIORITY_RANK[b.priority] ?? 1)
+  );
+
+  // Book up to `limit` hours of a task on one day, in sessions of max SESSION_HOURS
+  const book = (task, key, limit) => {
+    const total = Math.min(limit, maxHoursPerDay - (used[key] || 0));
+    if (total <= 0) return 0;
+    // Split into equal sessions, e.g. 2h -> 1h + 1h (not 1.5h + 0.5h)
+    const count = Math.ceil(total / SESSION_HOURS);
+    const base = Math.floor((total / count) * 4) / 4; // round to 15 min
+    for (let i = 0; i < count; i++) {
+      const hours = i === count - 1 ? total - base * (count - 1) : base; // last one takes the rest
+      (days[key] ||= []).push({ taskId: task.id, title: task.title, hours });
+    }
+    used[key] = (used[key] || 0) + total;
+    return total;
   };
+
+  for (const task of sorted) {
+    let remaining = task.hours;
+
+    // All days we can work on it: today ... the day before the deadline (1 buffer day)
+    const workDays = [];
+    const lastWorkDay = new Date(task.deadline + 'T00:00:00Z');
+    lastWorkDay.setUTCDate(lastWorkDay.getUTCDate() - 1);
+    for (let d = new Date(today); d <= lastWorkDay; d.setUTCDate(d.getUTCDate() + 1)) {
+      workDays.push(toDateStr(d));
+    }
+
+    // Pass 1: spread evenly -> a little bit every day (at least 1h, rounded up to 0.5h)
+    const perDay = Math.max(1, Math.ceil((remaining / workDays.length) * 2) / 2);
+    for (const key of workDays) {
+      if (remaining <= 0) break;
+      remaining -= book(task, key, Math.min(perDay, remaining));
+    }
+
+    // Pass 2: if some days were full, use any free time left (earliest first)
+    for (const key of workDays) {
+      if (remaining <= 0) break;
+      remaining -= book(task, key, remaining);
+    }
+
+    if (remaining > 0) {
+      atRisk.push({ taskId: task.id, title: task.title, missingHours: remaining });
+    }
+  }
+
+  return { source: 'rule-based', days, atRisk };
+}
+
+export async function planTasks(tasks, options) {
+  return ruleBasedPlan(tasks, options);
+}
 ```
 
-**2.** Replace the line `<p className="hint">📍 {places.length} saved place(s) ...</p>` with:
+Add the two tasks again.
+
+👀 **You see:** a little bit **every day** until each deadline. 🎉 That's a plan a procrastinator can actually follow.
+
+### 💡 The new recipe
+
+**Example:** today is Monday, a **6h** task is due **Saturday**, max 4h/day.
+
+```
+Work days:   Mon Tue Wed Thu Fri          (Saturday = deadline, no work)
+Daily share: 6h ÷ 5 days = 1.2h  →  rounded up to 1.5h
+Plan:        Mon 1.5h · Tue 1.5h · Wed 1.5h · Thu 1.5h  → done ✅  (Friday stays free as buffer)
+```
+
+- **Pass 1 – spread evenly:** `perDay` = hours ÷ work days, at least 1h, rounded **up** to a half hour (`Math.ceil(x * 2) / 2`: 1.2 → 1.5)
+- **Pass 2 – fill gaps:** if some days were already full (other tasks), put the rest in any free time left
+- **`book(...)`** – a helper that books hours on one day and splits them into **equal** sessions (2h → 1h + 1h, not 1.5h + 0.5h)
+- **Priority:** same deadline → `high` first. In the sort, `||` means *"if the deadlines are equal (0), compare priorities instead"*
+
+🧪 **Try:** add two tasks with the **same deadline**, one `high`, one `low` → the high one gets the earlier slots.
+
+---
+
+# Part K – Control the plan
+
+## K1. ✍️ Daily limit and "at risk" warning
+
+In **`client/src/pages/CalendarPage.jsx`**:
+
+**1.** Add `useCallback` to the React import:
 
 ```jsx
-        {/* NEW: list of saved places – click to fly there */}
-        <h3>Saved places</h3>
-        {!places.length && <p className="hint">Click on the map to save your first place.</p>}
-        <ul className="list">
-          {places.map((p) => (
-            <li key={p.id}>
-              <span className="link" onClick={() => flyTo([p.lng, p.lat])}>{p.name}</span>
-              <button className="small" onClick={() => removePlace(p.id)}>✕</button>
-            </li>
-          ))}
-        </ul>
+import { useCallback, useEffect, useMemo, useState } from 'react';
 ```
 
-👀 **You see:** a list of your places. Click one → the camera flies there. ✕ → the place **and its pin** disappear.
+**2.** Add a state under `plan`:
 
-💡 We didn't write any code to remove the pin! Deleting changes `places` → the marker effect from Lesson 2 (`[places]`) runs again → pins are redrawn. **Change the data, the screen follows.**
+```jsx
+  const [maxHoursPerDay, setMaxHoursPerDay] = useState(4); // daily work limit
+```
+
+**3.** Replace the "Ask the server for a plan" effect with:
+
+```jsx
+  const fetchPlan = useCallback(
+    (useAi = false) =>
+      api('/tasks/plan', {
+        method: 'POST',
+        body: { maxHoursPerDay: Number(maxHoursPerDay), useAi, today: todayYMD() },
+      }).then(setPlan),
+    [maxHoursPerDay]
+  );
+
+  // Re-plan automatically whenever tasks or the daily limit change
+  useEffect(() => {
+    fetchPlan().catch(console.error);
+  }, [tasks, fetchPlan]);
+```
+
+**4.** In the stats, replace the *done* box with an *at risk* box:
+
+```jsx
+          <div className={plan.atRisk.length ? 'bad' : ''}><b>{plan.atRisk.length}</b><span>at risk</span></div>
+```
+
+**5.** After the "Next deadline" line, add the warning and the daily-limit input:
+
+```jsx
+        {plan.atRisk.length > 0 && (
+          <div className="warning">
+            ⚠️ Not enough time for:
+            <ul>
+              {plan.atRisk.map((r) => <li key={r.taskId}>{r.title} — {r.missingHours}h missing</li>)}
+            </ul>
+            Raise the daily limit, lower the hours, or move the deadline.
+          </div>
+        )}
+
+        <div className="card plan-row">
+          <label>
+            Max hours / day
+            <input type="number" min="1" max="12" value={maxHoursPerDay}
+              onChange={(e) => setMaxHoursPerDay(e.target.value)} />
+          </label>
+        </div>
+```
+
+👀 **Try it:**
+1. Add a **12h** task due **tomorrow** → ⚠️ **at risk**, *"8h missing"*
+2. Change **Max hours / day** to **12** → the warning disappears, the whole plan changes instantly
+3. Tick a task as **done** → its sessions disappear
+
+### 💡 `useCallback`
+
+`fetchPlan` uses `maxHoursPerDay`. `useCallback` keeps the **same** function between redraws, and only makes a **new** one when `maxHoursPerDay` changes. Because `fetchPlan` is in the effect's dependency list, the effect runs again when the **tasks** change **or** the **daily limit** changes.
+
+---
+
+# Part L – Ask an AI 🤖
+
+## 💡 What is an "AI model" here?
+
+An **LLM** (Large Language Model, like ChatGPT) is a program you send text to, and it answers with text. Our server can:
+
+1. write a **prompt**: our rules + the tasks + *"answer only with JSON in this format"*
+2. send it to OpenAI's **API**
+3. use the JSON answer as the plan
+
+AI is powerful but **not reliable**: it can be slow, cost money, or answer nonsense. So we only use it when the user clicks a button, and if anything fails we **fall back** to our own planner.
+
+## 🔐 Secrets: API keys and `.env`
+
+An **API key** is a password for a paid service. Whoever has it can spend your money.
+- ❌ never write it in the code, ❌ never commit it to git
+- ✅ put it in **`server/.env`** – this file is listed in `.gitignore`, so git ignores it
+- the server reads it with `process.env.OPENAI_API_KEY`
+
+## L1. ✍️ The AI planner
+
+Create **`server/.env.example`** – it documents which settings exist, without real values:
+
+```bash
+PORT=3001
+# Optional: set this to let the calendar planner use a real LLM.
+# Without it, a simple rule-based planner is used.
+OPENAI_API_KEY=
+```
+
+Node doesn't read `.env` files by itself. In **`server/src/index.js`**, add this line **below the import lines**:
+
+```js
+// Load server/.env if it exists (secrets like OPENAI_API_KEY live there)
+try { process.loadEnvFile(); } catch { /* no .env file – that's fine */ }
+```
+
+`try { … } catch { … }` – without a `.env` file, `loadEnvFile` throws an error; we simply ignore it.
+
+In **`server/src/planner.js`**, replace the small `planTasks` function at the bottom with these two functions:
+
+```js
+/**
+ * Optional: ask an LLM to build the plan. Falls back to rules on any problem.
+ * Class exercise: improve the prompt, or add user preferences (e.g. "no work on Sundays").
+ */
+async function llmPlan(tasks, { maxHoursPerDay, today: todayStr }) {
+  const today = todayStr || toDateStr(new Date());
+  const prompt = `Today is ${today}. Plan these tasks for a person who procrastinates.
+Rules: start today, sessions of max ${SESSION_HOURS}h, max ${maxHoursPerDay}h per day,
+finish each task at least one day before its deadline, prefer high-priority tasks.
+Tasks: ${JSON.stringify(tasks.map(({ id, title, deadline, hours, priority }) => ({ id, title, deadline, hours, priority })))}
+Reply ONLY with JSON: {"days": {"YYYY-MM-DD": [{"taskId": number, "title": string, "hours": number}]}, "atRisk": [{"taskId": number, "title": string, "missingHours": number}]}`;
+
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  if (!res.ok) throw new Error(`LLM error ${res.status}`);
+  const data = await res.json();
+  const parsed = JSON.parse(data.choices[0].message.content);
+  return { source: 'ai', days: parsed.days || {}, atRisk: parsed.atRisk || [] };
+}
+
+// useAi: only call the LLM when the user explicitly asks (it's slower and costs money)
+export async function planTasks(tasks, options) {
+  if (options.useAi && process.env.OPENAI_API_KEY) {
+    try {
+      return await llmPlan(tasks, options);
+    } catch (err) {
+      console.warn('LLM planning failed, using rule-based planner:', err.message);
+    }
+  }
+  return ruleBasedPlan(tasks, options);
+}
+```
+
+### 💡 What's happening?
+
+- the **prompt** is plain text: the same rules as our algorithm, in English
+- we ask for **JSON in exactly our format** – so the frontend can't tell who made the plan
+- `fetch` works on the server too: here **our server** sends a request to OpenAI
+- `Authorization: Bearer …` sends the secret key
+- `planTasks` decides: AI only if the user asked (`useAi`) **and** a key exists. If the AI fails → `catch` → our rule-based planner
 
 <details>
-<summary>✅ <b>Checkpoint:</b> your <code>MapPage.jsx</code> should now look like this</summary>
+<summary>✅ <b>Checkpoint:</b> <code>server/src/planner.js</code> (final version)</summary>
 
-```jsx
-import { useEffect, useRef, useState } from 'react';
-import * as maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
-import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
-import { api } from '../api.js';
+```js
+// Planner for the AI Calendar.
+// Idea: people who procrastinate need the work split into small sessions
+// that start NOW and finish a day BEFORE the deadline (buffer day).
 
-// Tell MapLibre where its web worker (tile decoder) lives, so Vite can serve/bundle it
-maplibregl.setWorkerUrl(workerUrl);
+const SESSION_HOURS = 1.5; // max length of one work session
+const toDateStr = (d) => d.toISOString().slice(0, 10);
 
-// Free map tiles, no API key needed: https://openfreemap.org
-const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+/**
+ * Rule-based planner (works without any API key).
+ * Returns { source, days: { 'YYYY-MM-DD': [{ taskId, title, hours }] }, atRisk: [...] }
+ */
+const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
 
-const CITIES = {
-  Berlin: [13.405, 52.52],
-  Cologne: [6.9603, 50.9375],
-  'New York': [-73.9857, 40.7484],
-  Tokyo: [139.7671, 35.6812],
-};
+export function ruleBasedPlan(tasks, { maxHoursPerDay = 4, today: todayStr } = {}) {
+  const days = {};
+  const atRisk = [];
+  const used = {}; // hours already booked per day
 
-export default function MapPage() {
-  const containerRef = useRef(null); // the <div> the map is drawn into
-  const mapRef = useRef(null);       // the map object, so buttons can control it
-  const markersRef = useRef([]);     // the red pins currently on the map
-  const [places, setPlaces] = useState([]); // NEW in step 2: places saved on the server
+  // "today" comes from the browser so the user's time zone is respected
+  const today = new Date((todayStr || toDateStr(new Date())) + 'T00:00:00Z');
 
-  // Create the map once, when the page appears
-  useEffect(() => {
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: STYLE_URL,
-      center: CITIES.Berlin,
-      zoom: 15.5,
-      pitch: 60, // tilt the camera -> 3D look
-      bearing: -20,
-    });
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
+  // Earliest deadline first; on the same deadline, higher priority first
+  const sorted = [...tasks].sort(
+    (a, b) =>
+      a.deadline.localeCompare(b.deadline) ||
+      (PRIORITY_RANK[a.priority] ?? 1) - (PRIORITY_RANK[b.priority] ?? 1)
+  );
 
-    map.on('load', () => {
-      // Make sure buildings are extruded in 3D
-      if (!map.getLayer('building-3d')) {
-        map.addLayer({
-          id: 'building-3d',
-          source: 'openmaptiles',
-          'source-layer': 'building',
-          type: 'fill-extrusion',
-          minzoom: 14,
-          paint: {
-            'fill-extrusion-color': '#d6cfc4',
-            'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 10],
-            'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-            'fill-extrusion-opacity': 0.85,
-          },
-        });
-      }
-    });
-
-    // NEW: click on the map -> save a place on the server
-    map.on('click', async (e) => {
-      const name = window.prompt('Name this place:');
-      if (!name) return;
-      const place = await api('/places', {
-        method: 'POST',
-        body: { name, lng: e.lngLat.lng, lat: e.lngLat.lat },
-      });
-      setPlaces((prev) => [...prev, place]);
-    });
-
-    mapRef.current = map;
-    return () => map.remove(); // clean up when leaving the page
-  }, []);
-
-  // NEW: load saved places from the server
-  useEffect(() => {
-    api('/places').then(setPlaces).catch(console.error);
-  }, []);
-
-  // NEW: draw a red marker for every place (runs again whenever `places` changes)
-  useEffect(() => {
-    markersRef.current.forEach((m) => m.remove());
-    markersRef.current = places.map((p) =>
-      new maplibregl.Marker({ color: '#e63946' })
-        .setLngLat([p.lng, p.lat])
-        .setPopup(new maplibregl.Popup().setText(p.name))
-        .addTo(mapRef.current)
-    );
-  }, [places]);
-
-  const flyTo = (center) =>
-    mapRef.current.flyTo({ center, zoom: 16, pitch: 60, speed: 1.2 });
-
-  // NEW in step 3: delete a saved place
-  const removePlace = async (id) => {
-    await api(`/places/${id}`, { method: 'DELETE' });
-    setPlaces((prev) => prev.filter((p) => p.id !== id));
+  // Book up to `limit` hours of a task on one day, in sessions of max SESSION_HOURS
+  const book = (task, key, limit) => {
+    const total = Math.min(limit, maxHoursPerDay - (used[key] || 0));
+    if (total <= 0) return 0;
+    // Split into equal sessions, e.g. 2h -> 1h + 1h (not 1.5h + 0.5h)
+    const count = Math.ceil(total / SESSION_HOURS);
+    const base = Math.floor((total / count) * 4) / 4; // round to 15 min
+    for (let i = 0; i < count; i++) {
+      const hours = i === count - 1 ? total - base * (count - 1) : base; // last one takes the rest
+      (days[key] ||= []).push({ taskId: task.id, title: task.title, hours });
+    }
+    used[key] = (used[key] || 0) + total;
+    return total;
   };
 
+  for (const task of sorted) {
+    let remaining = task.hours;
+
+    // All days we can work on it: today ... the day before the deadline (1 buffer day)
+    const workDays = [];
+    const lastWorkDay = new Date(task.deadline + 'T00:00:00Z');
+    lastWorkDay.setUTCDate(lastWorkDay.getUTCDate() - 1);
+    for (let d = new Date(today); d <= lastWorkDay; d.setUTCDate(d.getUTCDate() + 1)) {
+      workDays.push(toDateStr(d));
+    }
+
+    // Pass 1: spread evenly -> a little bit every day (at least 1h, rounded up to 0.5h)
+    const perDay = Math.max(1, Math.ceil((remaining / workDays.length) * 2) / 2);
+    for (const key of workDays) {
+      if (remaining <= 0) break;
+      remaining -= book(task, key, Math.min(perDay, remaining));
+    }
+
+    // Pass 2: if some days were full, use any free time left (earliest first)
+    for (const key of workDays) {
+      if (remaining <= 0) break;
+      remaining -= book(task, key, remaining);
+    }
+
+    if (remaining > 0) {
+      atRisk.push({ taskId: task.id, title: task.title, missingHours: remaining });
+    }
+  }
+
+  return { source: 'rule-based', days, atRisk };
+}
+
+/**
+ * Optional: ask an LLM to build the plan. Falls back to rules on any problem.
+ * Class exercise: improve the prompt, or add user preferences (e.g. "no work on Sundays").
+ */
+async function llmPlan(tasks, { maxHoursPerDay, today: todayStr }) {
+  const today = todayStr || toDateStr(new Date());
+  const prompt = `Today is ${today}. Plan these tasks for a person who procrastinates.
+Rules: start today, sessions of max ${SESSION_HOURS}h, max ${maxHoursPerDay}h per day,
+finish each task at least one day before its deadline, prefer high-priority tasks.
+Tasks: ${JSON.stringify(tasks.map(({ id, title, deadline, hours, priority }) => ({ id, title, deadline, hours, priority })))}
+Reply ONLY with JSON: {"days": {"YYYY-MM-DD": [{"taskId": number, "title": string, "hours": number}]}, "atRisk": [{"taskId": number, "title": string, "missingHours": number}]}`;
+
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  if (!res.ok) throw new Error(`LLM error ${res.status}`);
+  const data = await res.json();
+  const parsed = JSON.parse(data.choices[0].message.content);
+  return { source: 'ai', days: parsed.days || {}, atRisk: parsed.atRisk || [] };
+}
+
+// useAi: only call the LLM when the user explicitly asks (it's slower and costs money)
+export async function planTasks(tasks, options) {
+  if (options.useAi && process.env.OPENAI_API_KEY) {
+    try {
+      return await llmPlan(tasks, options);
+    } catch (err) {
+      console.warn('LLM planning failed, using rule-based planner:', err.message);
+    }
+  }
+  return ruleBasedPlan(tasks, options);
+}
+```
+</details>
+
+## L2. ✍️ The AI button
+
+In **`client/src/pages/CalendarPage.jsx`**:
+
+**1.** Add a state:
+
+```jsx
+  const [aiLoading, setAiLoading] = useState(false);
+```
+
+**2.** Under the re-plan effect, add:
+
+```jsx
+  const planWithAi = async () => {
+    setAiLoading(true);
+    try { await fetchPlan(true); } finally { setAiLoading(false); }
+  };
+```
+
+**3.** In the `plan-row` card, after the `</label>`, add the button – and below the card, show who made the plan:
+
+```jsx
+          <button onClick={planWithAi} disabled={!open.length || aiLoading}>
+            {aiLoading ? 'Thinking…' : '✨ Re-plan with AI'}
+          </button>
+```
+
+```jsx
+        {plan.source && <p className="hint">Current plan: {plan.source}</p>}
+```
+
+👀 **You see:** a **✨ Re-plan with AI** button and *"Current plan: rule-based"*.
+
+- `finally` always runs – success or error – so the button never stays stuck on *"Thinking…"*
+- `disabled={...}` – greyed out when there's nothing to plan, or while waiting
+
+**Using a real AI** (needs an OpenAI account with credit):
+
+```bash
+cp server/.env.example server/.env    # then put your key in server/.env
+```
+
+Restart the app (**Control + C**, then `npm run dev`), click **✨ Re-plan with AI** → *"Current plan: ai"*. Compare the AI's plan with ours! Without a key, the button safely uses the rule-based planner.
+
+<details>
+<summary>✅ <b>Checkpoint:</b> your <code>CalendarPage.jsx</code> should now look like this</summary>
+
+```jsx
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { api } from '../api.js';
+import MonthCalendar from '../components/MonthCalendar.jsx';
+import { addDays, formatLong, fromYMD, relative, todayYMD } from '../utils/dates.js';
+
+const emptyForm = () => ({ title: '', deadline: addDays(todayYMD(), 7), hours: 3, priority: 'medium' });
+
+export default function CalendarPage() {
+  const [tasks, setTasks] = useState([]);
+  const [form, setForm] = useState(emptyForm);
+  const [month, setMonth] = useState(() => new Date()); // which month the calendar shows
+  const [selected, setSelected] = useState(todayYMD()); // which day is clicked
+  const [plan, setPlan] = useState({ source: '', days: {}, atRisk: [] });
+  const [maxHoursPerDay, setMaxHoursPerDay] = useState(4); // daily work limit
+  const [aiLoading, setAiLoading] = useState(false);
+
+  // Load tasks once
+  useEffect(() => {
+    api('/tasks').then(setTasks).catch(console.error);
+  }, []);
+
+  const fetchPlan = useCallback(
+    (useAi = false) =>
+      api('/tasks/plan', {
+        method: 'POST',
+        body: { maxHoursPerDay: Number(maxHoursPerDay), useAi, today: todayYMD() },
+      }).then(setPlan),
+    [maxHoursPerDay]
+  );
+
+  // Re-plan automatically whenever tasks or the daily limit change
+  useEffect(() => {
+    fetchPlan().catch(console.error);
+  }, [tasks, fetchPlan]);
+
+  const planWithAi = async () => {
+    setAiLoading(true);
+    try { await fetchPlan(true); } finally { setAiLoading(false); }
+  };
+
+  // ---- Task actions ----
+  const addTask = async (e) => {
+    e.preventDefault();
+    if (!form.title.trim()) return;
+    const task = await api('/tasks', { method: 'POST', body: form });
+    setTasks((prev) => [...prev, task]);
+    setForm(emptyForm());
+  };
+
+  const updateTask = async (id, changes) => {
+    const updated = await api(`/tasks/${id}`, { method: 'PATCH', body: changes });
+    setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+  };
+
+  const removeTask = async (id) => {
+    await api(`/tasks/${id}`, { method: 'DELETE' });
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const showDay = (ymd) => {
+    setMonth(fromYMD(ymd));
+    setSelected(ymd);
+  };
+
+  // ---- Turn tasks + plan into calendar events ----
+  const taskById = useMemo(() => Object.fromEntries(tasks.map((t) => [t.id, t])), [tasks]);
+
+  const events = useMemo(() => {
+    const ev = {};
+    for (const t of tasks) {
+      (ev[t.deadline] ||= []).push({
+        key: `d-${t.id}`, kind: 'deadline', label: t.title, color: t.color, done: t.done, task: t,
+      });
+    }
+    for (const [day, sessions] of Object.entries(plan.days)) {
+      // Merge several sessions of the same task on one day into one entry
+      const perTask = {};
+      for (const s of sessions) {
+        perTask[s.taskId] ||= { ...s, hours: 0, count: 0 };
+        perTask[s.taskId].hours += s.hours;
+        perTask[s.taskId].count += 1;
+      }
+      for (const s of Object.values(perTask)) {
+        const t = taskById[s.taskId];
+        (ev[day] ||= []).push({
+          key: `s-${day}-${s.taskId}`, kind: 'session', label: `${s.title} · ${s.hours}h`,
+          hours: s.hours, count: s.count, color: t?.color || '#888', task: t,
+        });
+      }
+    }
+    return ev;
+  }, [tasks, plan, taskById]);
+
+  // ---- Stats ----
+  const open = tasks.filter((t) => !t.done);
+  const totalHours = open.reduce((s, t) => s + t.hours, 0);
+  const nextDeadline = [...open].sort((a, b) => a.deadline.localeCompare(b.deadline))[0];
+  const sortedTasks = [...tasks].sort(
+    (a, b) => Number(a.done) - Number(b.done) || a.deadline.localeCompare(b.deadline)
+  );
+  const dayEvents = events[selected] || [];
+
   return (
-    <div className="map-layout">
-      <aside className="panel">
-        <h2>3D Map</h2>
-        <p className="hint">Drag with right mouse / Ctrl to rotate. Click the map to save a place.</p>
+    <div className="cal-page">
+      {/* ---------- Left column ---------- */}
+      <section className="cal-side">
+        <h2>AI Calendar</h2>
+        <p className="hint">Add tasks — your work gets spread out before every deadline.</p>
 
-        <h3>Cities</h3>
-        <div className="buttons">
-          {Object.entries(CITIES).map(([name, center]) => (
-            <button key={name} onClick={() => flyTo(center)}>{name}</button>
-          ))}
+        <form className="card form" onSubmit={addTask}>
+          <input
+            placeholder="What do you need to do?"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+          />
+          <div className="row">
+            <label>
+              Deadline
+              <input type="date" value={form.deadline}
+                onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
+            </label>
+            <label>
+              Hours
+              <input type="number" min="0.5" step="0.5" value={form.hours}
+                onChange={(e) => setForm({ ...form, hours: e.target.value })} />
+            </label>
+            <label>
+              Priority
+              <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+          </div>
+          <button type="submit">+ Add task</button>
+        </form>
+
+        <div className="stats">
+          <div><b>{open.length}</b><span>open tasks</span></div>
+          <div><b>{totalHours}h</b><span>work left</span></div>
+          <div className={plan.atRisk.length ? 'bad' : ''}><b>{plan.atRisk.length}</b><span>at risk</span></div>
         </div>
+        {nextDeadline && (
+          <p className="hint">Next deadline: <b>{nextDeadline.title}</b> {relative(nextDeadline.deadline)}</p>
+        )}
 
-        {/* NEW: list of saved places – click to fly there */}
-        <h3>Saved places</h3>
-        {!places.length && <p className="hint">Click on the map to save your first place.</p>}
-        <ul className="list">
-          {places.map((p) => (
-            <li key={p.id}>
-              <span className="link" onClick={() => flyTo([p.lng, p.lat])}>{p.name}</span>
-              <button className="small" onClick={() => removePlace(p.id)}>✕</button>
+        {plan.atRisk.length > 0 && (
+          <div className="warning">
+            ⚠️ Not enough time for:
+            <ul>
+              {plan.atRisk.map((r) => <li key={r.taskId}>{r.title} — {r.missingHours}h missing</li>)}
+            </ul>
+            Raise the daily limit, lower the hours, or move the deadline.
+          </div>
+        )}
+
+        <div className="card plan-row">
+          <label>
+            Max hours / day
+            <input type="number" min="1" max="12" value={maxHoursPerDay}
+              onChange={(e) => setMaxHoursPerDay(e.target.value)} />
+          </label>
+          <button onClick={planWithAi} disabled={!open.length || aiLoading}>
+            {aiLoading ? 'Thinking…' : '✨ Re-plan with AI'}
+          </button>
+        </div>
+        {plan.source && <p className="hint">Current plan: {plan.source}</p>}
+
+        <h3>Tasks</h3>
+        {!tasks.length && <p className="hint">No tasks yet.</p>}
+        <ul className="task-list">
+          {sortedTasks.map((t) => (
+            <li key={t.id} className={t.done ? 'done' : ''}>
+              <input type="checkbox" checked={t.done} onChange={() => updateTask(t.id, { done: !t.done })} />
+              <i className="dot" style={{ background: t.color }} />
+              <div className="task-info" onClick={() => showDay(t.deadline)}>
+                <div className="task-title">{t.title}</div>
+                <div className="task-meta">
+                  {t.hours}h · due {t.deadline} ({relative(t.deadline)})
+                  <span className={`badge ${t.priority}`}>{t.priority}</span>
+                </div>
+              </div>
+              <button className="small" onClick={() => removeTask(t.id)}>✕</button>
             </li>
           ))}
         </ul>
-      </aside>
-      <div ref={containerRef} className="map" />
+      </section>
+
+      {/* ---------- Right column ---------- */}
+      <section className="cal-main">
+        <MonthCalendar
+          month={month}
+          onMonthChange={setMonth}
+          events={events}
+          selected={selected}
+          onSelect={setSelected}
+        />
+
+        <div className="card day-details">
+          <h3>{formatLong(selected)}</h3>
+          {!dayEvents.length && <p className="hint">Nothing planned. Free day 🎉</p>}
+          {dayEvents.map((e) => (
+            <div key={e.key} className="day-item">
+              <i className="dot" style={{ background: e.color }} />
+              {e.kind === 'deadline'
+                ? <span><b>🏁 Deadline:</b> {e.label} {e.done && '✅'}</span>
+                : <span>Work on <b>{e.task?.title}</b> for {e.hours}h
+                    {e.count > 1 && <span className="hint"> ({e.count} sessions, take a break between)</span>}</span>}
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
@@ -987,58 +1283,50 @@ export default function MapPage() {
 
 ---
 
-## 🤔 Think about it
+# 🎉 You built it!
 
-The calendar now shows **when things are due**. But for someone who always starts the night before, that's not enough. They need to know **when to work** on each task. → Lesson 4.
+A full-stack app: React frontend, Express backend, your own algorithm and an AI integration.
 
 ## 💪 Bonus exercises
 
-**A.** Highlight weekends with a light background.
+**A.** No work on Sundays.
 
 <details><summary>💡 Solution</summary>
 
-In `MonthCalendar.jsx`, the position `i` of each box tells the weekday (0 = Mon … 6 = Sun):
+In `planner.js`, where `workDays` is built, skip Sundays (`getUTCDay()` → 0 = Sunday):
 
-```jsx
-{cells.map(({ ymd, day, inMonth }, i) => {
-  // ...
-  const classes = [
-    'cal-cell',
-    i % 7 >= 5 && 'weekend',
-    // ...
-```
-
-In `client/src/index.css`:
-
-```css
-.cal-cell.weekend { background: #fbf7ef; }
+```js
+for (let d = new Date(today); d <= lastWorkDay; d.setUTCDate(d.getUTCDate() + 1)) {
+  if (d.getUTCDay() === 0) continue;   // skip Sunday
+  workDays.push(toDateStr(d));
+}
 ```
 </details>
 
-**B.** Ask *"Delete this task?"* before deleting.
+**B.** Shorter sessions: max 45 minutes. *(Hint: one number at the top of `planner.js`.)*
 
-<details><summary>💡 Solution</summary>
+**C.** Two buffer days instead of one. *(Hint: `getUTCDate() - 1`.)*
 
-```jsx
-const removeTask = async (id) => {
-  if (!window.confirm('Delete this task?')) return;
-  // ...the rest stays the same
-};
-```
-</details>
+**D.** Improve the AI prompt: add *"never plan more than 2 different tasks on one day"* and compare.
+
+## 🚀 Ideas for your own project
+
+- 💾 a real **database** (PostgreSQL or MongoDB), so data survives a server restart
+- 🔐 user accounts, so everyone has their own tasks and places
+- 🔎 map: address search, routes between places, satellite view
+- 🗓️ calendar: week view with time slots, drag sessions to other days, reminders
+- 🌍 put it online: frontend on Vercel or Netlify, backend on Render or Railway
 
 ## 📖 Words you learned
 
 | Word | Meaning |
 |---|---|
-| **Props** | data a parent gives to a child component |
-| **Callback prop** | a function given as a prop, so the child can report something (`onSelect`) |
-| **Lifting state up** | keep state in the parent that needs it, pass it down |
-| **Derived data** | calculated from state instead of stored (`events` from `tasks`) |
-| **`useMemo`** | remember a calculation until its inputs change |
-| **`PATCH`** | change some fields of an existing item |
-| **`.find()` / `.reduce()` / `.sort()`** | find one item / combine all into one value / order a list |
-
-## ➡️ Next
-
-**[Lesson 4 – Planner + AI](https://github.com/amirreza98/App-dev-course/tree/step-4-planner#readme)**: the app plans *when* to work on each task.
+| **Business logic** | the rules of your app – lives on the server |
+| **Algorithm** | a step-by-step recipe that always gives a result |
+| **LLM / AI model** | a program that answers text with text |
+| **Prompt** | the instructions we send to the AI |
+| **API key** | a password for a paid service – keep it secret |
+| **`.env` / environment variable** | settings and secrets kept outside the code |
+| **Fallback** | plan B when something fails |
+| **`try / catch / finally`** | handle errors without crashing; `finally` always runs |
+| **`useCallback`** | keep the same function until its inputs change |

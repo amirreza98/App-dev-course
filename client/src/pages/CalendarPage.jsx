@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import MonthCalendar from '../components/MonthCalendar.jsx';
 import { addDays, formatLong, fromYMD, relative, todayYMD } from '../utils/dates.js';
@@ -10,11 +10,33 @@ export default function CalendarPage() {
   const [form, setForm] = useState(emptyForm);
   const [month, setMonth] = useState(() => new Date()); // which month the calendar shows
   const [selected, setSelected] = useState(todayYMD()); // which day is clicked
+  const [plan, setPlan] = useState({ source: '', days: {}, atRisk: [] });
+  const [maxHoursPerDay, setMaxHoursPerDay] = useState(4); // daily work limit
+  const [aiLoading, setAiLoading] = useState(false);
 
   // Load tasks once
   useEffect(() => {
     api('/tasks').then(setTasks).catch(console.error);
   }, []);
+
+  const fetchPlan = useCallback(
+    (useAi = false) =>
+      api('/tasks/plan', {
+        method: 'POST',
+        body: { maxHoursPerDay: Number(maxHoursPerDay), useAi, today: todayYMD() },
+      }).then(setPlan),
+    [maxHoursPerDay]
+  );
+
+  // Re-plan automatically whenever tasks or the daily limit change
+  useEffect(() => {
+    fetchPlan().catch(console.error);
+  }, [tasks, fetchPlan]);
+
+  const planWithAi = async () => {
+    setAiLoading(true);
+    try { await fetchPlan(true); } finally { setAiLoading(false); }
+  };
 
   // ---- Task actions ----
   const addTask = async (e) => {
@@ -40,7 +62,9 @@ export default function CalendarPage() {
     setSelected(ymd);
   };
 
-  // ---- Turn tasks into calendar events: { 'YYYY-MM-DD': [event, ...] } ----
+  // ---- Turn tasks + plan into calendar events ----
+  const taskById = useMemo(() => Object.fromEntries(tasks.map((t) => [t.id, t])), [tasks]);
+
   const events = useMemo(() => {
     const ev = {};
     for (const t of tasks) {
@@ -48,8 +72,24 @@ export default function CalendarPage() {
         key: `d-${t.id}`, kind: 'deadline', label: t.title, color: t.color, done: t.done, task: t,
       });
     }
+    for (const [day, sessions] of Object.entries(plan.days)) {
+      // Merge several sessions of the same task on one day into one entry
+      const perTask = {};
+      for (const s of sessions) {
+        perTask[s.taskId] ||= { ...s, hours: 0, count: 0 };
+        perTask[s.taskId].hours += s.hours;
+        perTask[s.taskId].count += 1;
+      }
+      for (const s of Object.values(perTask)) {
+        const t = taskById[s.taskId];
+        (ev[day] ||= []).push({
+          key: `s-${day}-${s.taskId}`, kind: 'session', label: `${s.title} · ${s.hours}h`,
+          hours: s.hours, count: s.count, color: t?.color || '#888', task: t,
+        });
+      }
+    }
     return ev;
-  }, [tasks]);
+  }, [tasks, plan, taskById]);
 
   // ---- Stats ----
   const open = tasks.filter((t) => !t.done);
@@ -65,7 +105,7 @@ export default function CalendarPage() {
       {/* ---------- Left column ---------- */}
       <section className="cal-side">
         <h2>AI Calendar</h2>
-        <p className="hint">Step 3: every deadline appears on the calendar.</p>
+        <p className="hint">Add tasks — your work gets spread out before every deadline.</p>
 
         <form className="card form" onSubmit={addTask}>
           <input
@@ -99,11 +139,33 @@ export default function CalendarPage() {
         <div className="stats">
           <div><b>{open.length}</b><span>open tasks</span></div>
           <div><b>{totalHours}h</b><span>work left</span></div>
-          <div><b>{tasks.length - open.length}</b><span>done</span></div>
+          <div className={plan.atRisk.length ? 'bad' : ''}><b>{plan.atRisk.length}</b><span>at risk</span></div>
         </div>
         {nextDeadline && (
           <p className="hint">Next deadline: <b>{nextDeadline.title}</b> {relative(nextDeadline.deadline)}</p>
         )}
+
+        {plan.atRisk.length > 0 && (
+          <div className="warning">
+            ⚠️ Not enough time for:
+            <ul>
+              {plan.atRisk.map((r) => <li key={r.taskId}>{r.title} — {r.missingHours}h missing</li>)}
+            </ul>
+            Raise the daily limit, lower the hours, or move the deadline.
+          </div>
+        )}
+
+        <div className="card plan-row">
+          <label>
+            Max hours / day
+            <input type="number" min="1" max="12" value={maxHoursPerDay}
+              onChange={(e) => setMaxHoursPerDay(e.target.value)} />
+          </label>
+          <button onClick={planWithAi} disabled={!open.length || aiLoading}>
+            {aiLoading ? 'Thinking…' : '✨ Re-plan with AI'}
+          </button>
+        </div>
+        {plan.source && <p className="hint">Current plan: {plan.source}</p>}
 
         <h3>Tasks</h3>
         {!tasks.length && <p className="hint">No tasks yet.</p>}
@@ -137,14 +199,16 @@ export default function CalendarPage() {
 
         <div className="card day-details">
           <h3>{formatLong(selected)}</h3>
-          {!dayEvents.length && <p className="hint">No deadlines this day.</p>}
+          {!dayEvents.length && <p className="hint">Nothing planned. Free day 🎉</p>}
           {dayEvents.map((e) => (
             <div key={e.key} className="day-item">
               <i className="dot" style={{ background: e.color }} />
-              <span><b>🏁 Deadline:</b> {e.label} {e.done && '✅'}</span>
+              {e.kind === 'deadline'
+                ? <span><b>🏁 Deadline:</b> {e.label} {e.done && '✅'}</span>
+                : <span>Work on <b>{e.task?.title}</b> for {e.hours}h
+                    {e.count > 1 && <span className="hint"> ({e.count} sessions, take a break between)</span>}</span>}
             </div>
           ))}
-          <p className="hint">Next step: plan <i>when</i> to work on each task, so it's not all left for the last day.</p>
         </div>
       </section>
     </div>
