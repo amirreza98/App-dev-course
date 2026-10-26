@@ -1,14 +1,63 @@
-// Project 2: AI Calendar
-// In step 1 we turn this placeholder into a task list.
+import { useState } from 'react';
+
+// Today as 'YYYY-MM-DD' (the format <input type="date"> uses)
+const today = () => new Date().toISOString().slice(0, 10);
 
 export default function CalendarPage() {
+  // State = data that can change. When it changes, React re-draws the page.
+  const [tasks, setTasks] = useState([]);
+  const [title, setTitle] = useState('');
+  const [deadline, setDeadline] = useState(today());
+  const [hours, setHours] = useState(3);
+
+  const addTask = (e) => {
+    e.preventDefault(); // don't reload the page
+    if (!title.trim()) return;
+    const task = { id: Date.now(), title, deadline, hours: Number(hours) };
+    setTasks([...tasks, task]); // new array = React notices the change
+    setTitle('');
+  };
+
+  const removeTask = (id) => setTasks(tasks.filter((t) => t.id !== id));
+
   return (
     <div className="simple-page">
-      <h2>📅 AI Calendar</h2>
-      <p>For people who push everything to the last minute: it spreads your work out before every deadline.</p>
-      <div className="card">
-        <p className="hint">🚧 Coming in step 1 — switch with <code>git checkout -f step-1-react</code></p>
-      </div>
+      <h2>AI Calendar</h2>
+      <p className="hint">Step 1: tasks live only in the browser. Refresh the page and they are gone.</p>
+
+      <form className="card form" onSubmit={addTask}>
+        <input
+          placeholder="What do you need to do?"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+        <div className="row">
+          <label>
+            Deadline
+            <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+          </label>
+          <label>
+            Hours
+            <input type="number" min="0.5" step="0.5" value={hours}
+              onChange={(e) => setHours(e.target.value)} />
+          </label>
+        </div>
+        <button type="submit">+ Add task</button>
+      </form>
+
+      <h3>Tasks ({tasks.length})</h3>
+      {!tasks.length && <p className="hint">No tasks yet.</p>}
+      <ul className="task-list">
+        {tasks.map((t) => (
+          <li key={t.id}>
+            <div className="task-info">
+              <div className="task-title">{t.title}</div>
+              <div className="task-meta">{t.hours}h · due {t.deadline}</div>
+            </div>
+            <button className="small" onClick={() => removeTask(t.id)}>✕</button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
