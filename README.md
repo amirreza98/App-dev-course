@@ -7,29 +7,29 @@ We build two apps **step by step, with our own hands**: a 🗺️ **3D Map** and
 
 | Step (open its tutorial) | Branch | Time |
 |---|---|---|
-| [0 · Your first React app](https://github.com/amirreza98/App-dev-course/tree/main#readme) | `main` | ~30 min |
+| [0 · Your first React app](https://github.com/amirreza98/App-dev-course/tree/main#readme) | `main` | ~45 min |
 | [1 · React basics](https://github.com/amirreza98/App-dev-course/tree/step-1-react#readme) | `step-1-react` | ~60 min |
 | [2 · Backend](https://github.com/amirreza98/App-dev-course/tree/step-2-backend#readme) | `step-2-backend` | ~60 min |
 | [3 · Calendar](https://github.com/amirreza98/App-dev-course/tree/step-3-calendar#readme) | `step-3-calendar` | ~50 min |
 | [4 · Planner + AI](https://github.com/amirreza98/App-dev-course/tree/step-4-planner#readme) **📍 you are here** | `step-4-planner` | ~50 min |
 | [5 · Database](https://github.com/amirreza98/App-dev-course/tree/step-5-database#readme) | `step-5-database` | ~60 min |
 
-**How it works:** this page is the tutorial for this step. Follow it from top to bottom: copy each code block into your file → **save** → look at the browser. You keep working in your own code from step to step. The branch holds the **finished code** of the step – if you fall behind, catch up with `git checkout -f <branch> && npm install`.
+**How it works:** this page is the tutorial for this step. Follow it from top to bottom: create, replace or delete exactly the files it tells you → **save** → look at the browser. **Lesson 0 starts from an empty folder**, and every lesson continues in your own code – reading the lessons in order is all you need. The branch holds the **finished code** of the step, so you can compare or catch up.
 
 <details>
-<summary><b>⚙️ First time? Setup</b></summary>
+<summary><b>🆘 Fell behind? Get the finished code of any step</b></summary>
 
-1. Install **Node.js** (LTS, 20.19 or newer): https://nodejs.org and **VS Code**: https://code.visualstudio.com
-2. In a terminal:
+You need **Node.js** (LTS, 20.19 or newer): https://nodejs.org
 
 ```bash
 git clone https://github.com/amirreza98/App-dev-course.git
 cd App-dev-course
+git checkout -f <branch>     # e.g. step-2-backend
 npm install
 npm run dev
 ```
 
-3. Open **http://localhost:5173**. Stop the app with **Control + C**.
+Open **http://localhost:5173**. Stop the app with **Control + C**. From step 5 on, you also need your own `server/.env` (see Lesson 5).
 </details>
 
 ---
@@ -132,6 +132,85 @@ router.post('/plan', async (req, res) => {
 - `/^\d{4}-\d{2}-\d{2}$/` is a **regular expression**: a pattern that checks the text looks like `2026-10-26`
 - `maxHoursPerDay` and `useAi` aren't used yet – soon!
 - `try { … } catch (err) { … }` – if anything inside crashes, send a `500` instead of killing the server
+
+<details>
+<summary>✅ <b>Checkpoint:</b> your <code>server/src/routes/tasks.js</code> should now look like this</summary>
+
+```js
+import { Router } from 'express';
+import { planTasks } from '../planner.js';
+
+const router = Router();
+
+const COLORS = ['#4361ee', '#e63946', '#2a9d8f', '#f4a261', '#9b5de5', '#06aed5', '#e76f51', '#588157'];
+const PRIORITIES = ['low', 'medium', 'high'];
+
+// In-memory "database" — resets when the server restarts.
+// Next level: replace this array with a real database (MongoDB / PostgreSQL).
+let tasks = [];
+let nextId = 1;
+
+// GET /api/tasks -> list all tasks
+router.get('/', (req, res) => res.json(tasks));
+
+// POST /api/tasks -> create a task. Body: { title, deadline, hours, priority }
+router.post('/', (req, res) => {
+  const { title, deadline, hours, priority = 'medium' } = req.body;
+  if (!title || !deadline || !hours) {
+    return res.status(400).json({ error: 'title, deadline and hours are required' });
+  }
+  const id = nextId++;
+  const task = {
+    id,
+    title,
+    deadline,
+    hours: Number(hours),
+    priority: PRIORITIES.includes(priority) ? priority : 'medium',
+    color: COLORS[(id - 1) % COLORS.length],
+    done: false,
+  };
+  tasks.push(task);
+  res.status(201).json(task);
+});
+
+// PATCH /api/tasks/:id -> change some fields, e.g. { done: true } or { priority: 'high' }
+router.patch('/:id', (req, res) => {
+  const task = tasks.find((t) => t.id === Number(req.params.id));
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+  const { title, deadline, hours, priority, done } = req.body;
+  if (title !== undefined) task.title = title;
+  if (deadline !== undefined) task.deadline = deadline;
+  if (hours !== undefined) task.hours = Number(hours);
+  if (PRIORITIES.includes(priority)) task.priority = priority;
+  if (done !== undefined) task.done = Boolean(done);
+  res.json(task);
+});
+
+// DELETE /api/tasks/:id -> remove a task
+router.delete('/:id', (req, res) => {
+  tasks = tasks.filter((t) => t.id !== Number(req.params.id));
+  res.status(204).end();
+});
+
+// POST /api/tasks/plan -> build a schedule that spreads work out BEFORE the deadline.
+// Body: { maxHoursPerDay, useAi, today: 'YYYY-MM-DD' }
+router.post('/plan', async (req, res) => {
+  const maxHoursPerDay = Number(req.body?.maxHoursPerDay) || 4;
+  const useAi = Boolean(req.body?.useAi);
+  const today = /^\d{4}-\d{2}-\d{2}$/.test(req.body?.today) ? req.body.today : undefined;
+  try {
+    const open = tasks.filter((t) => !t.done);
+    const plan = await planTasks(open, { maxHoursPerDay, useAi, today });
+    res.json(plan);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Planning failed' });
+  }
+});
+
+export default router;
+```
+</details>
 
 Nothing visible yet – next block!
 
@@ -839,6 +918,35 @@ try { process.loadEnvFile(); } catch { /* no .env file – that's fine */ }
 ```
 
 `try { … } catch { … }` – without a `.env` file, `loadEnvFile` throws an error; we simply ignore it.
+
+<details>
+<summary>✅ <b>Checkpoint:</b> your <code>server/src/index.js</code> should now look like this</summary>
+
+```js
+import express from 'express';
+import cors from 'cors';
+import placesRouter from './routes/places.js';
+import tasksRouter from './routes/tasks.js';
+
+// Load server/.env if it exists (secrets like OPENAI_API_KEY live there)
+try { process.loadEnvFile(); } catch { /* no .env file – that's fine */ }
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+app.get('/api/health', (req, res) => res.json({ ok: true }));
+
+// Project 1: 3D Map
+app.use('/api/places', placesRouter);
+
+// Project 2: AI Calendar
+app.use('/api/tasks', tasksRouter);
+
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`));
+```
+</details>
 
 In **`server/src/planner.js`**, replace the small `planTasks` function at the bottom with these two functions:
 
