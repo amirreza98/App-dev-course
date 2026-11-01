@@ -1,28 +1,30 @@
 import { Router } from 'express';
+import { pool } from '../db.js';
 
 const router = Router();
 
-// In-memory "database" — resets when the server restarts.
-// Next step for students: replace with a real DB (MongoDB / PostgreSQL).
-let places = [
-  { id: 1, name: 'Brandenburg Gate', lng: 13.3777, lat: 52.5163 },
-];
-let nextId = 2;
+// GET /api/places -> all saved places
+router.get('/', async (req, res) => {
+  const result = await pool.query('SELECT * FROM places ORDER BY id');
+  res.json(result.rows);
+});
 
-router.get('/', (req, res) => res.json(places));
-
-router.post('/', (req, res) => {
+// POST /api/places -> save a new place. Body: { name, lng, lat }
+router.post('/', async (req, res) => {
   const { name, lng, lat } = req.body;
   if (!name || lng == null || lat == null) {
     return res.status(400).json({ error: 'name, lng and lat are required' });
   }
-  const place = { id: nextId++, name, lng: Number(lng), lat: Number(lat) };
-  places.push(place);
-  res.status(201).json(place);
+  const result = await pool.query(
+    'INSERT INTO places (name, lng, lat) VALUES ($1, $2, $3) RETURNING *',
+    [name, Number(lng), Number(lat)]
+  );
+  res.status(201).json(result.rows[0]);
 });
 
-router.delete('/:id', (req, res) => {
-  places = places.filter((p) => p.id !== Number(req.params.id));
+// DELETE /api/places/:id -> remove a place
+router.delete('/:id', async (req, res) => {
+  await pool.query('DELETE FROM places WHERE id = $1', [Number(req.params.id)]);
   res.status(204).end();
 });
 
