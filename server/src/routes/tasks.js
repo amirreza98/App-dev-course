@@ -10,9 +10,11 @@ const PRIORITIES = ['low', 'medium', 'high'];
 // The colour is not stored in the database: we calculate it from the id
 const withColor = (task) => ({ ...task, color: COLORS[(task.id - 1) % COLORS.length] });
 
-// GET /api/tasks -> list all tasks
+// Every query uses req.userId (set by requireAuth), so users only see their own tasks
+
+// GET /api/tasks -> list my tasks
 router.get('/', async (req, res) => {
-  const result = await pool.query('SELECT * FROM tasks ORDER BY deadline, id');
+  const result = await pool.query('SELECT * FROM tasks WHERE user_id = $1 ORDER BY deadline, id', [req.userId]);
   res.json(result.rows.map(withColor));
 });
 
@@ -23,10 +25,10 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'title, deadline and hours are required' });
   }
   const result = await pool.query(
-    `INSERT INTO tasks (title, deadline, hours, priority)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO tasks (title, deadline, hours, priority, user_id)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
-    [title, deadline, Number(hours), PRIORITIES.includes(priority) ? priority : 'medium']
+    [title, deadline, Number(hours), PRIORITIES.includes(priority) ? priority : 'medium', req.userId]
   );
   res.status(201).json(withColor(result.rows[0]));
 });
@@ -42,7 +44,7 @@ router.patch('/:id', async (req, res) => {
        hours    = COALESCE($3, hours),
        priority = COALESCE($4, priority),
        done     = COALESCE($5, done)
-     WHERE id = $6
+     WHERE id = $6 AND user_id = $7
      RETURNING *`,
     [
       title ?? null,
@@ -51,6 +53,7 @@ router.patch('/:id', async (req, res) => {
       PRIORITIES.includes(priority) ? priority : null,
       done !== undefined ? Boolean(done) : null,
       Number(req.params.id),
+      req.userId,
     ]
   );
   if (result.rows.length === 0) return res.status(404).json({ error: 'Task not found' });
@@ -59,7 +62,7 @@ router.patch('/:id', async (req, res) => {
 
 // DELETE /api/tasks/:id -> remove a task
 router.delete('/:id', async (req, res) => {
-  await pool.query('DELETE FROM tasks WHERE id = $1', [Number(req.params.id)]);
+  await pool.query('DELETE FROM tasks WHERE id = $1 AND user_id = $2', [Number(req.params.id), req.userId]);
   res.status(204).end();
 });
 
@@ -70,7 +73,7 @@ router.post('/plan', async (req, res) => {
   const useAi = Boolean(req.body?.useAi);
   const today = /^\d{4}-\d{2}-\d{2}$/.test(req.body?.today) ? req.body.today : undefined;
   try {
-    const result = await pool.query('SELECT * FROM tasks WHERE done = false');
+    const result = await pool.query('SELECT * FROM tasks WHERE done = false AND user_id = $1', [req.userId]);
     const plan = await planTasks(result.rows.map(withColor), { maxHoursPerDay, useAi, today });
     res.json(plan);
   } catch (err) {
