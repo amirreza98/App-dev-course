@@ -7,29 +7,29 @@ We build two apps **step by step, with our own hands**: a 🗺️ **3D Map** and
 
 | Step (open its tutorial) | Branch | Time |
 |---|---|---|
-| [0 · Your first React app](https://github.com/amirreza98/App-dev-course/tree/main#readme) | `main` | ~30 min |
+| [0 · Your first React app](https://github.com/amirreza98/App-dev-course/tree/main#readme) | `main` | ~45 min |
 | [1 · React basics](https://github.com/amirreza98/App-dev-course/tree/step-1-react#readme) | `step-1-react` | ~60 min |
 | [2 · Backend](https://github.com/amirreza98/App-dev-course/tree/step-2-backend#readme) **📍 you are here** | `step-2-backend` | ~60 min |
 | [3 · Calendar](https://github.com/amirreza98/App-dev-course/tree/step-3-calendar#readme) | `step-3-calendar` | ~50 min |
 | [4 · Planner + AI](https://github.com/amirreza98/App-dev-course/tree/step-4-planner#readme) | `step-4-planner` | ~50 min |
 | [5 · Database](https://github.com/amirreza98/App-dev-course/tree/step-5-database#readme) | `step-5-database` | ~60 min |
 
-**How it works:** this page is the tutorial for this step. Follow it from top to bottom: copy each code block into your file → **save** → look at the browser. You keep working in your own code from step to step. The branch holds the **finished code** of the step – if you fall behind, catch up with `git checkout -f <branch> && npm install`.
+**How it works:** this page is the tutorial for this step. Follow it from top to bottom: create, replace or delete exactly the files it tells you → **save** → look at the browser. **Lesson 0 starts from an empty folder**, and every lesson continues in your own code – reading the lessons in order is all you need. The branch holds the **finished code** of the step, so you can compare or catch up.
 
 <details>
-<summary><b>⚙️ First time? Setup</b></summary>
+<summary><b>🆘 Fell behind? Get the finished code of any step</b></summary>
 
-1. Install **Node.js** (LTS, 20.19 or newer): https://nodejs.org and **VS Code**: https://code.visualstudio.com
-2. In a terminal:
+You need **Node.js** (LTS, 20.19 or newer): https://nodejs.org
 
 ```bash
 git clone https://github.com/amirreza98/App-dev-course.git
 cd App-dev-course
+git checkout -f <branch>     # e.g. step-2-backend
 npm install
 npm run dev
 ```
 
-3. Open **http://localhost:5173**. Stop the app with **Control + C**.
+Open **http://localhost:5173**. Stop the app with **Control + C**. From step 5 on, you also need your own `server/.env` (see Lesson 5).
 </details>
 
 ---
@@ -256,6 +256,28 @@ The frontend runs on 5173, the backend on 3001. The **proxy** forwards every `/a
 ```
 Browser ──/api/tasks──▶ Vite :5173 ──forwards──▶ Express :3001
 ```
+
+<details>
+<summary>✅ <b>Checkpoint:</b> your <code>client/vite.config.js</code> should now look like this</summary>
+
+```js
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  // Always use one copy of React (prevents "Invalid hook call")
+  resolve: { dedupe: ['react', 'react-dom'] },
+  // MapLibre loads its web worker relative to its own file; pre-bundling breaks that
+  optimizeDeps: { exclude: ['maplibre-gl'] },
+  server: {
+    port: 5173,
+    // Forward /api/* calls to the Express server
+    proxy: { '/api': 'http://localhost:3001' },
+  },
+});
+```
+</details>
 
 **2.** Create **`client/src/api.js`** – one small helper for all requests:
 
