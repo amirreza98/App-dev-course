@@ -1,0 +1,35 @@
+# Runs automatically on GitHub every time someone pushes code.
+# Green check = the app builds and all tests pass. Red cross = something broke.
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # A throw-away PostgreSQL database just for the tests
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: course
+          POSTGRES_PASSWORD: course
+          POSTGRES_DB: appdev
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://course:course@localhost:5432/appdev
+      JWT_SECRET: ci-test-secret
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci           # install exactly the versions in package-lock.json
+      - run: npm run build    # does the frontend build?
+      - run: npm test         # planner + API tests
