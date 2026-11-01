@@ -12,6 +12,7 @@ We build two apps **step by step, with our own hands**: a 🗺️ **3D Map** and
 | [2 · Backend](https://github.com/amirreza98/App-dev-course/tree/step-2-backend#readme) **📍 you are here** | `step-2-backend` | ~60 min |
 | [3 · Calendar](https://github.com/amirreza98/App-dev-course/tree/step-3-calendar#readme) | `step-3-calendar` | ~50 min |
 | [4 · Planner + AI](https://github.com/amirreza98/App-dev-course/tree/step-4-planner#readme) | `step-4-planner` | ~50 min |
+| [5 · Database](https://github.com/amirreza98/App-dev-course/tree/step-5-database#readme) | `step-5-database` | ~60 min |
 
 **How it works:** this page is the tutorial for this step. Follow it from top to bottom: copy each code block into your file → **save** → look at the browser. You keep working in your own code from step to step. The branch holds the **finished code** of the step – if you fall behind, catch up with `git checkout -f <branch> && npm install`.
 
