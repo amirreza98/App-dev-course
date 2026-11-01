@@ -12,6 +12,7 @@ We build two apps **step by step, with our own hands**: a 🗺️ **3D Map** and
 | [2 · Backend](https://github.com/amirreza98/App-dev-course/tree/step-2-backend#readme) | `step-2-backend` | ~60 min |
 | [3 · Calendar](https://github.com/amirreza98/App-dev-course/tree/step-3-calendar#readme) | `step-3-calendar` | ~50 min |
 | [4 · Planner + AI](https://github.com/amirreza98/App-dev-course/tree/step-4-planner#readme) **📍 you are here** | `step-4-planner` | ~50 min |
+| [5 · Database](https://github.com/amirreza98/App-dev-course/tree/step-5-database#readme) | `step-5-database` | ~60 min |
 
 **How it works:** this page is the tutorial for this step. Follow it from top to bottom: copy each code block into your file → **save** → look at the browser. You keep working in your own code from step to step. The branch holds the **finished code** of the step – if you fall behind, catch up with `git checkout -f <branch> && npm install`.
 
@@ -1332,3 +1333,7 @@ for (let d = new Date(today); d <= lastWorkDay; d.setUTCDate(d.getUTCDate() + 1)
 | **Fallback** | plan B when something fails |
 | **`try / catch / finally`** | handle errors without crashing; `finally` always runs |
 | **`useCallback`** | keep the same function until its inputs change |
+
+---
+
+➡️ **Next:** [Lesson 5 – A real database](https://github.com/amirreza98/App-dev-course/tree/step-5-database#readme): make your tasks and places survive a server restart.
