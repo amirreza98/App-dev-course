@@ -33,7 +33,8 @@ button.ghost { background: transparent; color: #1d3557; border: 1px solid #1d355
 .dot.deadline { background: #1d3557; }
 .dot.session { background: #1d355733; border-left: 3px solid #1d3557; border-radius: 2px; }
 
-.cal-page { display: grid; grid-template-columns: 340px 1fr; gap: 20px; padding: 20px; align-items: start; }
+.cal-page { display: grid; grid-template-columns: 360px 1fr; gap: 20px; padding: 20px; height: 100%; overflow: hidden; }
+.cal-side, .cal-main { min-height: 0; overflow-y: auto; }
 .cal-side h2 { margin: 0; }
 .cal-side .form, .simple-page .form { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
 .cal-side .row, .simple-page .row { display: grid; grid-template-columns: 1.4fr 0.8fr 1fr; gap: 8px; }

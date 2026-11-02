@@ -5,7 +5,7 @@ const MAX_CHIPS = 3;
 
 /**
  * Month view.
- * events: { 'YYYY-MM-DD': [{ key, label, color, done }] }
+ * events: { 'YYYY-MM-DD': [{ key, label, color, kind: 'deadline' | 'session', done }] }
  */
 export default function MonthCalendar({ month, onMonthChange, events, selected, onSelect }) {
   const year = month.getFullYear();
@@ -15,6 +15,7 @@ export default function MonthCalendar({ month, onMonthChange, events, selected, 
 
   const shift = (n) => onMonthChange(new Date(year, m + n, 1));
   const title = month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const hasSessions = Object.values(events).some((list) => list.some((e) => e.kind === 'session'));
 
   return (
     <div className="cal">
@@ -32,6 +33,7 @@ export default function MonthCalendar({ month, onMonthChange, events, selected, 
 
         {cells.map(({ ymd, day, inMonth }) => {
           const list = events[ymd] || [];
+          const hours = list.filter((e) => e.kind === 'session').reduce((s, e) => s + e.hours, 0);
           const classes = [
             'cal-cell',
             !inMonth && 'muted',
@@ -44,21 +46,29 @@ export default function MonthCalendar({ month, onMonthChange, events, selected, 
             <div key={ymd} className={classes} onClick={() => onSelect(ymd)}>
               <div className="cal-day">
                 <span>{day}</span>
+                {hours > 0 && <span className="cal-hours">{hours}h</span>}
               </div>
               {list.slice(0, MAX_CHIPS).map((e) => (
                 <div
                   key={e.key}
-                  className={`chip deadline ${e.done ? 'done' : ''}`}
-                  style={{ background: e.color }}
+                  className={`chip ${e.kind} ${e.done ? 'done' : ''}`}
+                  style={e.kind === 'deadline'
+                    ? { background: e.color }
+                    : { borderLeftColor: e.color, background: e.color + '22' }}
                   title={e.label}
                 >
-                  🏁 {e.label}
+                  {e.kind === 'deadline' ? '🏁 ' : ''}{e.label}
                 </div>
               ))}
               {list.length > MAX_CHIPS && <div className="chip more">+{list.length - MAX_CHIPS} more</div>}
             </div>
           );
         })}
+      </div>
+
+      <div className="cal-legend">
+        <span><i className="dot deadline" /> Deadline</span>
+        {hasSessions && <span><i className="dot session" /> Planned work session</span>}
       </div>
     </div>
   );
