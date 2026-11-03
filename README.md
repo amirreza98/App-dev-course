@@ -14,7 +14,8 @@ We build two apps **step by step, with our own hands**: a 🗺️ **3D Map** and
 | [4 · Planner + AI](https://github.com/amirreza98/App-dev-course/tree/step-4-planner#readme) | `step-4-planner` | ~50 min |
 | [5 · Database](https://github.com/amirreza98/App-dev-course/tree/step-5-database#readme) | `step-5-database` | ~60 min |
 | [6 · Login](https://github.com/amirreza98/App-dev-course/tree/step-6-auth#readme) | `step-6-auth` | ~70 min |
-| [7 · Go live](https://github.com/amirreza98/App-dev-course/tree/step-7-deploy#readme) **📍 you are here** | `step-7-deploy` | ~60 min |
+| [7 · Go live](https://github.com/amirreza98/App-dev-course/tree/step-7-deploy#readme) | `step-7-deploy` | ~75 min |
+| [8 · Mobile app](https://github.com/amirreza98/App-dev-course/tree/step-8-mobile#readme) **📍 you are here** | `step-8-mobile` | ~3 h |
 
 **How it works:** this page is the tutorial for this step. Follow it from top to bottom: create, replace or delete exactly the files it tells you → **save** → look at the browser. **Lesson 0 starts from an empty folder**, and every lesson continues in your own code – reading the lessons in order is all you need. The branch holds the **finished code** of the step, so you can compare or catch up.
 
@@ -36,436 +37,1009 @@ Open **http://localhost:5173**. Stop the app with **Control + C**. From step 5 o
 
 ---
 
-# Lesson 7 – Go live: deploy to Vercel (+ automatic tests)
+# Lesson 8 – The mobile app: your project on your phone
 
 | | |
 |---|---|
-| ⏱️ Time | ~75 min |
-| 🏁 Start from | your code from Lesson 6 (or `git checkout -f step-7-deploy` for the finished result) |
-| ✅ Finished result | branch `step-7-deploy` |
-| 🎯 You will | put the app on the internet with a real link, and let GitHub test every change automatically |
+| ⏱️ Time | ~2 × 90 min |
+| 🏁 Start from | your code from Lesson 7 – **your app must be live** (Lesson 7, Part T) |
+| ✅ Finished result | branch `step-8-mobile` (folder `mobile/`) |
+| 🎯 You will | build a real iPhone / Android app with **React Native**, using the **same server and database** as your website |
 
-> 🆘 **Stuck or behind?** Run `git checkout -f step-7-deploy && npm install`. You still need your own `server/.env` (Lessons 5 and 6).
-
----
-
-## 💡 From "my laptop" to "the internet"
-
-Today the app only runs while **your** laptop runs `npm run dev`. To share it, we need a computer that is always on: a **host**. We use **Vercel** (free for students).
-
-| | On your laptop | On Vercel |
-|---|---|---|
-| Frontend | Vite dev server (`:5173`) | the built files (`npm run build` → `client/dist`) |
-| Backend | `node src/index.js` runs all the time | a **serverless function**: starts only when a request comes in |
-| Database | Neon | **the same** Neon |
-| Secrets | `server/.env` | Vercel → **Environment Variables** |
-
-**Serverless** means: no server waits all day. Vercel starts our Express app for a request, answers, and may stop it again. So our code must **not** call `app.listen()` itself on Vercel – Vercel does the listening.
-
-```
-Browser ──▶ app-dev-course-xyz.vercel.app
-             ├── /            → client/dist/index.html (React)
-             └── /api/...     → api/index.js → our Express app → Neon
-```
+> 🆘 **Stuck or behind?** Run `git checkout -f step-8-mobile`, then `cd mobile && npm install`, set your link in `mobile/src/config.js` (V1) and start with `npx expo start` (U4).
 
 ---
 
-# Part R – Make the server ready for Vercel
+## 💡 React → React Native: what changes, what stays
 
-## R1. ✍️ Split the app from `listen()`
+You **don't convert** the website. You build a second frontend that talks to the **same API**:
 
-Create **`server/src/app.js`** – the whole Express app, but **without** `app.listen()`:
-
-```js
-import express from 'express';
-import cors from 'cors';
-import { initDb, missingSettings } from './db.js';
-import { requireAuth } from './middleware/auth.js';
-import authRouter from './routes/auth.js';
-import placesRouter from './routes/places.js';
-import tasksRouter from './routes/tasks.js';
-
-// The Express app – WITHOUT app.listen().
-// Locally index.js starts it; on Vercel, api/index.js hands it to Vercel.
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-app.get('/api/health', (req, res) => res.json({ ok: true }));
-
-// Before every other API request: settings present? tables created?
-app.use('/api', async (req, res, next) => {
-  const missing = missingSettings();
-  if (missing.length) {
-    return res.status(500).json({ error: `Server is not configured: ${missing.join(', ')} missing` });
-  }
-  await initDb(); // fast after the first time
-  next();
-});
-
-// Login and registration – open to everyone
-app.use('/api/auth', authRouter);
-
-// Project 1: 3D Map – only for logged-in users
-app.use('/api/places', requireAuth, placesRouter);
-
-// Project 2: AI Calendar – only for logged-in users
-app.use('/api/tasks', requireAuth, tasksRouter);
-
-// If something fails, answer with a clear error instead of crashing
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ error: 'Something went wrong on the server' });
-});
-
-export default app;
+```
+            ┌── Website (React, client/) ──┐
+Neon ◀── Express API on Vercel ◀──────────┤
+            └── Phone app (React Native, mobile/) ──┘
 ```
 
-- `export default app` – other files can now use the app
-- the new middleware on `/api` checks the settings and creates the tables **on the first request**. On Vercel there is no "server start", so this is the right moment.
-- if a setting is missing, you get a clear message like *"Server is not configured: DATABASE_URL missing"* instead of a crash
+| Stays the same ✅ | Changes 🔄 |
+|---|---|
+| React: components, `useState`, `useEffect`, props | `<div>` → `<View>`, `<p>`/`<span>` → `<Text>` |
+| The whole server, database, login, planner | `<input>` → `<TextInput>`, `<button>` → `<Pressable>` |
+| `fetch` and our `api()` helper idea | CSS file → `StyleSheet.create({...})` in JavaScript |
+| Date helpers (`dates.js`) | `localStorage` → `SecureStore` (encrypted phone storage) |
+| | MapLibre → `react-native-maps` (Apple Maps / Google Maps, with 3D buildings) |
 
-Replace **`server/src/index.js`** with – it is now only for your laptop:
-
-```js
-// Local development: check the settings, prepare the database, start listening.
-import app from './app.js';
-import { initDb, missingSettings } from './db.js';
-
-const missing = missingSettings();
-if (missing.length) {
-  console.error(`❌ Missing in server/.env: ${missing.join(', ')} (see server/.env.example)`);
-  process.exit(1);
-}
-
-try {
-  await initDb();
-} catch (err) {
-  console.error('❌ Could not connect to the database. Check DATABASE_URL in server/.env');
-  console.error(err.message);
-  process.exit(1);
-}
-
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`));
-```
-
-## R2. ✍️ No more `process.exit()` in `db.js`
-
-On Vercel, stopping the process would kill every request. Replace **`server/src/db.js`** with:
-
-```js
-import pg from 'pg';
-
-// Locally, settings come from server/.env. On Vercel they come from the project's
-// "Environment Variables" – there is no .env file there, and that's fine.
-try { process.loadEnvFile(); } catch { /* no .env file */ }
-
-// Which required settings are missing? (empty list = all good)
-export const missingSettings = () => ['DATABASE_URL', 'JWT_SECRET'].filter((name) => !process.env[name]);
-
-// Return DATE columns as plain 'YYYY-MM-DD' text (not JavaScript Date objects)
-pg.types.setTypeParser(1082, (value) => value);
-
-// A pool keeps a few connections open and reuses them for every query
-export const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-
-// Create the tables once. On Vercel the server starts again and again,
-// so we remember the result and only do it the first time.
-let ready = null;
-export function initDb() {
-  if (!ready) ready = createTables().catch((err) => { ready = null; throw err; });
-  return ready;
-}
-
-async function createTables() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id            SERIAL PRIMARY KEY,
-      email         TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-
-    CREATE TABLE IF NOT EXISTS places (
-      id   SERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
-      lng  DOUBLE PRECISION NOT NULL,
-      lat  DOUBLE PRECISION NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS tasks (
-      id       SERIAL PRIMARY KEY,
-      title    TEXT NOT NULL,
-      deadline DATE NOT NULL,
-      hours    REAL NOT NULL,
-      priority TEXT NOT NULL DEFAULT 'medium',
-      done     BOOLEAN NOT NULL DEFAULT false
-    );
-
-    -- Every place and task now belongs to one user
-    ALTER TABLE places ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
-    ALTER TABLE tasks  ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
-  `);
-  console.log('✅ Database ready');
-}
-```
-
-- `missingSettings()` only **reports** missing settings – `index.js` (laptop) and `app.js` (Vercel) decide what to do
-- `initDb()` remembers its result (`ready`), so the tables are created only once
-
-**👀 Test it:** `npm run dev` → the app works exactly as before. Nothing changed for the user – only the structure.
-
-## R3. ✍️ The Vercel function and settings
-
-Create the folder **`api`** in the **root** folder (next to `client/` and `server/`) and in it the file **`api/index.js`**:
-
-```js
-// Vercel turns every file in the api/ folder into a serverless function.
-// This one simply hands every /api/... request to our Express app.
-import app from '../server/src/app.js';
-
-export default app;
-```
-
-Vercel turns **every file in `api/`** into a serverless function. This one just hands over our Express app.
-
-Create **`vercel.json`** in the **root** folder:
-
-```json
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "installCommand": "npm install",
-  "buildCommand": "npm run build",
-  "outputDirectory": "client/dist",
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
-}
-```
-
-- `buildCommand` / `outputDirectory` – build the React app and serve `client/dist`
-- **rewrites**: every `/api/...` request goes to our function; every other address gets `index.html`, so React can show the page
+We use **Expo**: a toolkit that runs your app on your phone **without Xcode or Android Studio**. You install the free **Expo Go** app, scan a QR code – done.
 
 ---
 
-# Part S – Automatic tests
+# Part U – Your first app on your phone
 
-## 💡 Why tests?
+## U1. Install Expo Go on your phone
 
-Every time you change something, you could break something else. Clicking through the whole app by hand after every change takes forever. **Tests** are small programs that check your code for you – in a second.
+- iPhone: **App Store** → search **Expo Go** → install
+- Android: **Play Store** → search **Expo Go** → install
 
-- **Unit test** – checks one function alone (our planner)
-- **API test** – starts the real server and sends real requests
+## U2. Create the app
 
-## S1. ✍️ Test the planner
-
-Create the folder **`server/test`** and in it the file **`server/test/planner.test.js`**:
-
-```js
-// Unit tests: check the planner rules without a server or database.
-// Run with:  npm test
-import { test } from 'node:test';
-import assert from 'node:assert/strict';
-import { ruleBasedPlan } from '../src/planner.js';
-
-const TODAY = '2026-11-02';
-const task = (id, deadline, hours, priority = 'medium') => ({ id, title: `Task ${id}`, deadline, hours, priority });
-
-// Helper: all sessions of the plan as one flat list
-const sessions = (plan) => Object.entries(plan.days).flatMap(([day, list]) => list.map((s) => ({ day, ...s })));
-
-test('plans all hours of a task', () => {
-  const plan = ruleBasedPlan([task(1, '2026-11-08', 6)], { today: TODAY });
-  const total = sessions(plan).reduce((sum, s) => sum + s.hours, 0);
-  assert.equal(total, 6);
-  assert.deepEqual(plan.atRisk, []);
-});
-
-test('never plans work on the deadline day or later', () => {
-  const plan = ruleBasedPlan([task(1, '2026-11-05', 4)], { today: TODAY });
-  for (const s of sessions(plan)) assert.ok(s.day < '2026-11-05', `session on ${s.day}`);
-});
-
-test('spreads work over several days (not everything today)', () => {
-  const plan = ruleBasedPlan([task(1, '2026-11-08', 6)], { today: TODAY });
-  assert.ok(Object.keys(plan.days).length >= 3);
-});
-
-test('sessions are at most 1.5 hours', () => {
-  const plan = ruleBasedPlan([task(1, '2026-11-04', 6)], { maxHoursPerDay: 6, today: TODAY });
-  for (const s of sessions(plan)) assert.ok(s.hours <= 1.5, `${s.hours}h session`);
-});
-
-test('respects the daily limit', () => {
-  const plan = ruleBasedPlan([task(1, '2026-11-06', 8), task(2, '2026-11-06', 8)], { maxHoursPerDay: 3, today: TODAY });
-  for (const [day, list] of Object.entries(plan.days)) {
-    const hours = list.reduce((sum, s) => sum + s.hours, 0);
-    assert.ok(hours <= 3, `${hours}h on ${day}`);
-  }
-});
-
-test('warns when a task does not fit', () => {
-  const plan = ruleBasedPlan([task(1, '2026-11-03', 10)], { maxHoursPerDay: 4, today: TODAY });
-  assert.equal(plan.atRisk.length, 1);
-  assert.equal(plan.atRisk[0].missingHours, 6);
-});
-```
-
-- `test('name', () => { ... })` – one test = one rule of the planner
-- `assert.equal(a, b)` – *"a must be b, otherwise the test fails"*
-- the tests use a fixed `TODAY`, so they give the same result every day
-
-## S2. ✍️ Test the API
-
-Create **`server/test/api.test.js`**:
-
-```js
-// API tests: start the real Express app and send real HTTP requests.
-// Needs DATABASE_URL and JWT_SECRET (from server/.env, or from GitHub Actions).
-import { test, before, after } from 'node:test';
-import assert from 'node:assert/strict';
-import app from '../src/app.js';
-import { pool } from '../src/db.js';
-
-let server, base;
-
-before(async () => {
-  server = app.listen(0);                                   // 0 = any free port
-  await new Promise((resolve) => server.once('listening', resolve));
-  base = `http://localhost:${server.address().port}/api`;
-});
-
-after(async () => {
-  server.close();
-  await pool.end();
-});
-
-// Small helper: send a request, return { status, body }
-async function call(method, path, body, token) {
-  const res = await fetch(base + path, {
-    method,
-    headers: {
-      ...(body && { 'Content-Type': 'application/json' }),
-      ...(token && { Authorization: `Bearer ${token}` }),
-    },
-    body: body && JSON.stringify(body),
-  });
-  return { status: res.status, body: res.status === 204 ? null : await res.json() };
-}
-
-const email = (name) => `${name}-${Date.now()}@test.de`;
-
-test('health check works', async () => {
-  const res = await call('GET', '/health');
-  assert.equal(res.status, 200);
-});
-
-test('tasks need a login', async () => {
-  const res = await call('GET', '/tasks');
-  assert.equal(res.status, 401);
-});
-
-test('register, create a task, and read it back', async () => {
-  const reg = await call('POST', '/auth/register', { email: email('lena'), password: 'secret123' });
-  assert.equal(reg.status, 201);
-  const token = reg.body.token;
-
-  const created = await call('POST', '/tasks', { title: 'Thesis', deadline: '2030-01-10', hours: 6 }, token);
-  assert.equal(created.status, 201);
-
-  const list = await call('GET', '/tasks', null, token);
-  assert.equal(list.body.length, 1);
-  assert.equal(list.body[0].title, 'Thesis');
-});
-
-test('wrong password is refused', async () => {
-  const address = email('omar');
-  await call('POST', '/auth/register', { email: address, password: 'secret123' });
-  const res = await call('POST', '/auth/login', { email: address, password: 'nope-nope' });
-  assert.equal(res.status, 401);
-});
-
-test('users only see their own tasks', async () => {
-  const a = (await call('POST', '/auth/register', { email: email('a'), password: 'secret123' })).body.token;
-  const b = (await call('POST', '/auth/register', { email: email('b'), password: 'secret123' })).body.token;
-  const task = (await call('POST', '/tasks', { title: 'Private', deadline: '2030-01-10', hours: 2 }, a)).body;
-
-  assert.equal((await call('GET', '/tasks', null, b)).body.length, 0);
-  assert.equal((await call('PATCH', `/tasks/${task.id}`, { done: true }, b)).status, 404);
-});
-```
-
-- `app.listen(0)` starts the real app on any free port – that's why we split `app.js` from `index.js`!
-- the last test proves the most important rule of Lesson 6: **Omar can't touch Lena's task**
-
-## S3. ✍️ Run the tests
-
-Replace **`server/package.json`** with (new: the `test` script):
-
-```json
-{
-  "name": "server",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "node --watch src/index.js",
-    "start": "node src/index.js",
-    "test": "node --test"
-  },
-  "dependencies": {
-    "bcryptjs": "^3.0.3",
-    "cors": "^2.8.5",
-    "express": "^5.3.0",
-    "jsonwebtoken": "^9.0.3",
-    "pg": "^8.23.1"
-  }
-}
-```
-
-Replace the **root** **`package.json`** with:
-
-```json
-{
-  "name": "app-dev-course",
-  "private": true,
-  "type": "module",
-  "workspaces": ["client", "server"],
-  "scripts": {
-    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
-    "build": "npm run build -w client",
-    "test": "npm test -w server"
-  },
-  "devDependencies": {
-    "concurrently": "^9.0.0"
-  }
-}
-```
-
-- `"type": "module"` – lets `api/index.js` use `import`, like the rest of our code
-- `"test"` – `npm test` in the root folder runs the server tests
-
-Run:
+In the **root** folder of the project (next to `client/` and `server/`):
 
 ```bash
+npx create-expo-app@latest mobile --template blank
+```
+
+A new folder **`mobile/`** appears – a complete, separate React Native project with its own `package.json`.
+
+> 💡 `mobile` is **not** added to the root `workspaces`: the phone app uses its own versions of React. Always run its commands **inside** `mobile/`.
+
+## U3. Clean up and install the libraries
+
+Delete what we don't need (if they exist): **`mobile/AGENTS.md`**, **`mobile/LICENSE`** and the folder **`mobile/.claude`**.
+
+```bash
+rm -rf mobile/AGENTS.md mobile/LICENSE mobile/.claude
+```
+
+Now install three libraries – **always with `npx expo install`** (it picks versions that fit your Expo version):
+
+```bash
+cd mobile
+npx expo install react-native-maps expo-secure-store react-native-safe-area-context
+```
+
+- **react-native-maps** – the map (Apple Maps on iPhone, Google Maps on Android), works in Expo Go
+- **expo-secure-store** – stores the login token encrypted on the phone
+- **react-native-safe-area-context** – keeps our app away from the notch and the home bar
+
+Replace **`mobile/app.json`** with (new: the app name):
+
+```json
+{
+  "expo": {
+    "name": "App Dev Course",
+    "slug": "app-dev-course",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
+  }
+}
+```
+
+## U4. 📱 Start it
+
+Still in the `mobile` folder:
+
+```bash
+npx expo start
+```
+
+A **QR code** appears in the terminal.
+
+- **iPhone:** open the **Camera** app → point it at the QR code → tap the banner
+- **Android:** open **Expo Go** → **Scan QR code**
+
+👀 **You see:** *"Open up App.js to start working on your app!"* on your phone. Open **`mobile/App.js`**, change the text, save → the phone updates instantly – just like Vite!
+
+> 📶 Phone and laptop must be on the **same Wi-Fi**. University Wi-Fi often blocks this – then stop with **Control + C** and run `npx expo start --tunnel` (say **yes** if it asks to install something).
+
+---
+
+# Part V – Log in with your real account
+
+## V1. ✍️ Where is your server?
+
+Create the folder **`mobile/src`** and in it **`mobile/src/config.js`**:
+
+```js
+// The address of YOUR live server from Lesson 7 – no "/" at the end.
+// The phone talks to the same API, the same login and the same database as the website.
+export const API_URL = 'https://app-dev-course-live.vercel.app';
+```
+
+**Change the link to YOUR live link from Lesson 7.** On the website, the API was on the same address (`/api/...`). A phone app runs on the phone, so it needs the **full** address.
+
+## V2. ✍️ The API helper for the phone
+
+Create **`mobile/src/api.js`**:
+
+```js
+// Same idea as client/src/api.js – but for the phone:
+// - full address (the app does not run on the same server as the API)
+// - the token lives in SecureStore (encrypted phone storage) instead of localStorage
+import * as SecureStore from 'expo-secure-store';
+import { API_URL } from './config';
+
+const TOKEN_KEY = 'token';
+
+export const getToken = () => SecureStore.getItemAsync(TOKEN_KEY);
+
+export const setToken = (token) =>
+  token ? SecureStore.setItemAsync(TOKEN_KEY, token) : SecureStore.deleteItemAsync(TOKEN_KEY);
+
+// App.js tells us what to do when the token is no longer valid
+let onLogout = () => {};
+export const setOnLogout = (fn) => { onLogout = fn; };
+
+export async function api(path, { method = 'GET', body } = {}) {
+  const headers = {};
+  if (body) headers['Content-Type'] = 'application/json';
+
+  const token = await getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let res;
+  try {
+    res = await fetch(`${API_URL}/api${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new Error('No connection to the server. Check your internet and API_URL in src/config.js');
+  }
+
+  // Token expired -> forget it and go back to the login screen
+  if (res.status === 401 && token) {
+    await setToken(null);
+    onLogout();
+  }
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `${method} ${path} failed: ${res.status}`);
+  }
+  return res.status === 204 ? null : res.json();
+}
+```
+
+Compare it with `client/src/api.js` – almost the same! Differences:
+
+- `${API_URL}/api${path}` – full address
+- `SecureStore` instead of `localStorage`. Its functions are **async** (they return a Promise), so we use `await`.
+- there is no `window` on a phone, so instead of a `logout` event, `App.js` gives us a function with `setOnLogout`
+- a clear message if the phone has no connection
+
+## V3. ✍️ Shared styles
+
+On the phone there is no CSS file. Styles are JavaScript objects. Create **`mobile/src/theme.js`**:
+
+```js
+// One place for colours and shared styles, so all screens look the same
+import { StyleSheet } from 'react-native';
+
+export const colors = {
+  navy: '#1d3557',
+  bg: '#f6f6f8',
+  card: '#ffffff',
+  text: '#1d1d1f',
+  muted: '#666666',
+  border: '#dddddd',
+  danger: '#c1121f',
+  dangerBg: '#fde2e4',
+  warnBg: '#fff3cd',
+};
+
+export const ui = StyleSheet.create({
+  card: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 12 },
+  title: { fontSize: 22, fontWeight: '700', color: colors.text },
+  label: { fontSize: 12, color: colors.muted, marginBottom: 4 },
+  hint: { fontSize: 13, color: colors.muted },
+  input: {
+    borderWidth: 1, borderColor: colors.border, borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, backgroundColor: '#fff',
+  },
+  button: { backgroundColor: colors.navy, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
+  buttonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  chip: { borderWidth: 1, borderColor: colors.navy, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
+  chipActive: { backgroundColor: colors.navy },
+  chipText: { color: colors.navy, fontWeight: '500' },
+  chipTextActive: { color: '#fff' },
+  error: { backgroundColor: colors.dangerBg, color: colors.danger, padding: 10, borderRadius: 8, overflow: 'hidden' },
+});
+```
+
+- `StyleSheet.create({ ... })` – like CSS classes, but in JavaScript
+- names are **camelCase**: `background-color` → `backgroundColor`, `border-radius` → `borderRadius`
+- numbers have **no unit**: `padding: 14` (not `'14px'`)
+
+## V4. ✍️ The login screen
+
+Create the folder **`mobile/src/screens`** and in it **`mobile/src/screens/LoginScreen.js`**:
+
+```js
+import { useState } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View, StyleSheet } from 'react-native';
+import { api } from '../api';
+import { colors, ui } from '../theme';
+
+export default function LoginScreen({ onLogin }) {
+  const [mode, setMode] = useState('login'); // 'login' or 'register'
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const isLogin = mode === 'login';
+
+  const submit = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      // Same API as the website: POST /api/auth/login or /api/auth/register
+      const data = await api(`/auth/${mode}`, { method: 'POST', body: { email, password } });
+      await onLogin(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <View style={[ui.card, styles.card]}>
+        <Text style={ui.title}>{isLogin ? '👋 Welcome back' : '✨ Create your account'}</Text>
+        <Text style={ui.hint}>3D Map + AI Calendar</Text>
+
+        <View>
+          <Text style={ui.label}>Email</Text>
+          <TextInput
+            style={ui.input}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            autoComplete="email"
+            keyboardType="email-address"
+            placeholder="you@example.com"
+          />
+        </View>
+        <View>
+          <Text style={ui.label}>Password</Text>
+          <TextInput
+            style={ui.input}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            placeholder="at least 6 characters"
+          />
+        </View>
+
+        {error ? <Text style={ui.error}>{error}</Text> : null}
+
+        <Pressable style={[ui.button, loading && { opacity: 0.6 }]} onPress={submit} disabled={loading}>
+          <Text style={ui.buttonText}>{loading ? 'Please wait…' : isLogin ? 'Log in' : 'Create account'}</Text>
+        </Pressable>
+
+        <Pressable onPress={() => { setMode(isLogin ? 'register' : 'login'); setError(''); }}>
+          <Text style={ui.hint}>
+            {isLogin ? 'No account yet? ' : 'Already have an account? '}
+            <Text style={styles.link}>{isLogin ? 'Create one' : 'Log in'}</Text>
+          </Text>
+        </Pressable>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  page: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: colors.navy },
+  card: { gap: 14, padding: 22 },
+  link: { color: colors.navy, fontWeight: '600', textDecorationLine: 'underline' },
+});
+```
+
+Put it next to `client/src/pages/LoginPage.jsx` – the **logic is identical**. Only the building blocks change:
+
+| Website | Phone |
+|---|---|
+| `<form onSubmit>` | no forms – the button's `onPress` calls `submit` |
+| `<input type="email" onChange={e => setEmail(e.target.value)}>` | `<TextInput keyboardType="email-address" onChangeText={setEmail}>` |
+| `<input type="password">` | `<TextInput secureTextEntry>` |
+| `<button>` | `<Pressable><Text>…</Text></Pressable>` – **all text must be inside `<Text>`** |
+
+`KeyboardAvoidingView` moves the form up when the keyboard opens on iPhone.
+
+## V5. ✍️ App.js: login first, then the tabs
+
+The map and calendar screens come in Parts W and X. For now, create two small placeholders so the app works already.
+
+Create **`mobile/src/screens/MapScreen.js`**:
+
+```js
+import { Text, View } from 'react-native';
+
+export default function MapScreen() {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <Text>🗺️ The map comes in Part W</Text>
+    </View>
+  );
+}
+```
+
+Create **`mobile/src/screens/CalendarScreen.js`**:
+
+```js
+import { Text, View } from 'react-native';
+
+export default function CalendarScreen() {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <Text>📅 The calendar comes in Part X</Text>
+    </View>
+  );
+}
+```
+
+Replace **`mobile/App.js`** with:
+
+```js
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { api, getToken, setOnLogout, setToken } from './src/api';
+import LoginScreen from './src/screens/LoginScreen';
+import MapScreen from './src/screens/MapScreen';
+import CalendarScreen from './src/screens/CalendarScreen';
+import { colors } from './src/theme';
+
+const TABS = {
+  map: { label: '🗺️ 3D Map', component: MapScreen },
+  calendar: { label: '📅 Calendar', component: CalendarScreen },
+};
+
+export default function App() {
+  const [user, setUser] = useState(null);       // null = not logged in
+  const [checking, setChecking] = useState(true); // looking for a saved token
+  const [tab, setTab] = useState('map');
+
+  useEffect(() => {
+    setOnLogout(() => setUser(null)); // api.js calls this when the token expired
+
+    // App opened: is there a saved token? Then ask the server who we are.
+    getToken()
+      .then((token) => token && api('/auth/me').then(setUser))
+      .catch(() => setToken(null))
+      .finally(() => setChecking(false));
+  }, []);
+
+  const login = async ({ token, user }) => {
+    await setToken(token);
+    setUser(user);
+  };
+
+  const logout = async () => {
+    await setToken(null);
+    setUser(null);
+    setTab('map');
+  };
+
+  let content;
+  if (checking) {
+    content = <ActivityIndicator style={{ flex: 1 }} size="large" />;
+  } else if (!user) {
+    content = <LoginScreen onLogin={login} />;
+  } else {
+    const Screen = TABS[tab].component;
+    content = (
+      <>
+        <View style={styles.header}>
+          <Text style={styles.headerText} numberOfLines={1}>{user.email}</Text>
+          <Pressable onPress={logout}><Text style={styles.logout}>Log out</Text></Pressable>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Screen />
+        </View>
+        <View style={styles.tabBar}>
+          {Object.entries(TABS).map(([key, { label }]) => (
+            <Pressable key={key} style={styles.tab} onPress={() => setTab(key)}>
+              <Text style={[styles.tabText, tab === key && styles.tabActive]}>{label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </>
+    );
+  }
+
+  return (
+    <SafeAreaProvider>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.navy }}>
+        <StatusBar style="light" />
+        <View style={{ flex: 1, backgroundColor: colors.bg }}>{content}</View>
+      </SafeAreaView>
+    </SafeAreaProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.navy, paddingHorizontal: 16, paddingVertical: 10 },
+  headerText: { color: '#cfd8e3', flex: 1 },
+  logout: { color: '#fff', fontWeight: '600' },
+  tabBar: { flexDirection: 'row', backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: colors.border },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 12 },
+  tabText: { fontSize: 15, color: colors.muted },
+  tabActive: { color: colors.navy, fontWeight: '700' },
+});
+```
+
+The same ideas as `client/src/App.jsx`: `user` state, check the saved token on start (`/auth/me`), `login` / `logout`, and a `TABS` object – this time as a **tab bar at the bottom**, like real apps.
+
+**📱 Test it:** the phone shows the login screen. Log in with **the same email and password as on your website**. 🎉 Your email appears at the top. Close Expo Go and open the app again → still logged in (SecureStore).
+
+---
+
+# Part W – The 3D map
+
+## W1. ✍️ Map screen
+
+Replace **`mobile/src/screens/MapScreen.js`** with:
+
+```js
+import { useEffect, useRef, useState } from 'react';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
+import { api } from '../api';
+import { colors, ui } from '../theme';
+
+const CITIES = {
+  Berlin: { latitude: 52.5163, longitude: 13.3777 },
+  Cologne: { latitude: 50.9413, longitude: 6.9583 },
+  'New York': { latitude: 40.7484, longitude: -73.9857 },
+  Tokyo: { latitude: 35.6812, longitude: 139.7671 },
+};
+
+// A tilted camera = 3D look (pitch tilts it, heading turns it)
+const camera = (center) => ({ center, pitch: 60, heading: -20, altitude: 600, zoom: 17 });
+
+export default function MapScreen() {
+  const mapRef = useRef(null);
+  const [places, setPlaces] = useState([]);
+  const [pending, setPending] = useState(null); // coordinate of a new place, while we ask for its name
+  const [name, setName] = useState('');
+
+  // Load my saved places once
+  useEffect(() => {
+    api('/places').then(setPlaces).catch((err) => Alert.alert('Error', err.message));
+  }, []);
+
+  const flyTo = (center) => mapRef.current?.animateCamera(camera(center), { duration: 1500 });
+
+  // Long press on the map -> ask for a name
+  const startAdd = (e) => {
+    setPending(e.nativeEvent.coordinate);
+    setName('');
+  };
+
+  const savePlace = async () => {
+    if (!name.trim()) return;
+    try {
+      const place = await api('/places', {
+        method: 'POST',
+        body: { name: name.trim(), lat: pending.latitude, lng: pending.longitude },
+      });
+      setPlaces((prev) => [...prev, place]);
+      setPending(null);
+    } catch (err) {
+      Alert.alert('Error', err.message);
+    }
+  };
+
+  const removePlace = (place) => {
+    Alert.alert('Delete place?', place.name, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await api(`/places/${place.id}`, { method: 'DELETE' });
+          setPlaces((prev) => prev.filter((p) => p.id !== place.id));
+        },
+      },
+    ]);
+  };
+
+  return (
+    <View style={styles.page}>
+      <MapView
+        ref={mapRef}
+        style={StyleSheet.absoluteFill}
+        initialCamera={camera(CITIES.Berlin)}
+        showsBuildings
+        pitchEnabled
+        rotateEnabled
+        onLongPress={startAdd}
+      >
+        {places.map((p) => (
+          <Marker key={p.id} coordinate={{ latitude: p.lat, longitude: p.lng }} title={p.name} />
+        ))}
+      </MapView>
+
+      {/* City buttons on top of the map */}
+      <ScrollView horizontal style={styles.topBar} contentContainerStyle={styles.row} showsHorizontalScrollIndicator={false}>
+        {Object.entries(CITIES).map(([city, center]) => (
+          <Pressable key={city} style={styles.pill} onPress={() => flyTo(center)}>
+            <Text style={styles.pillText}>{city}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      {/* My places at the bottom: tap = fly there, long press = delete */}
+      <View style={styles.bottomBar}>
+        <Text style={ui.hint}>
+          {places.length ? 'My places (tap = go, hold = delete)' : 'Hold your finger on the map to save a place'}
+        </Text>
+        <ScrollView horizontal contentContainerStyle={styles.row} showsHorizontalScrollIndicator={false}>
+          {places.map((p) => (
+            <Pressable
+              key={p.id}
+              style={ui.chip}
+              onPress={() => flyTo({ latitude: p.lat, longitude: p.lng })}
+              onLongPress={() => removePlace(p)}
+            >
+              <Text style={ui.chipText}>📍 {p.name}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Small dialog for the name of a new place */}
+      <Modal visible={!!pending} transparent animationType="fade" onRequestClose={() => setPending(null)}>
+        <View style={styles.backdrop}>
+          <View style={[ui.card, { gap: 12 }]}>
+            <Text style={ui.title}>New place</Text>
+            <TextInput style={ui.input} value={name} onChangeText={setName} placeholder="e.g. SRH Campus" autoFocus />
+            <Pressable style={ui.button} onPress={savePlace}>
+              <Text style={ui.buttonText}>Save</Text>
+            </Pressable>
+            <Pressable onPress={() => setPending(null)}>
+              <Text style={[ui.hint, { textAlign: 'center' }]}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  page: { flex: 1 },
+  topBar: { position: 'absolute', top: 10, left: 0, right: 0, flexGrow: 0 },
+  row: { gap: 8, paddingHorizontal: 12, alignItems: 'center' },
+  pill: { backgroundColor: colors.navy, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
+  pillText: { color: '#fff', fontWeight: '600' },
+  bottomBar: {
+    position: 'absolute', bottom: 10, left: 10, right: 10,
+    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 12, paddingVertical: 10, gap: 8,
+    paddingLeft: 12,
+  },
+  backdrop: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.4)' },
+});
+```
+
+- **`<MapView>`** draws Apple Maps (iPhone) or Google Maps (Android)
+- **`camera`**: `pitch: 60` tilts the view, `heading` turns it, `showsBuildings` → **3D buildings**
+- **`animateCamera`** flies smoothly to a city – the same idea as `map.flyTo` on the website
+- **`onLongPress`** – hold your finger on the map → a **`Modal`** (small window) asks for the name → `POST /api/places`
+- **`<Marker>`** – one pin per saved place
+- `StyleSheet.absoluteFill` – the map fills the whole screen; the buttons float on top (`position: 'absolute'`)
+
+**📱 Test it:** **3D Map** tab → you see your places from the website (e.g. Brandenburg Gate). Tap **Tokyo** → the camera flies there. Tilt with two fingers. Hold your finger on a building → name it → it appears on the **website** too (refresh it)!
+
+---
+
+# Part X – The calendar
+
+## X1. ✍️ Copy the date helpers
+
+The date helpers are plain JavaScript – they work on the phone unchanged. Create the folder **`mobile/src/utils`** and copy the file:
+
+```bash
+mkdir -p src/utils
+cp ../client/src/utils/dates.js src/utils/dates.js
+```
+
+*(Run this inside `mobile/`. On Windows without Git Bash: copy `client/src/utils/dates.js` to `mobile/src/utils/dates.js` in VS Code.)*
+
+## X2. ✍️ Calendar screen
+
+Replace **`mobile/src/screens/CalendarScreen.js`** with:
+
+```js
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { api } from '../api';
+import { addDays, formatLong, relative, todayYMD } from '../utils/dates';
+import { colors, ui } from '../theme';
+
+const PRIORITIES = ['low', 'medium', 'high'];
+const QUICK_DEADLINES = [3, 7, 14, 30]; // "in X days" buttons instead of a date picker
+
+const emptyForm = () => ({ title: '', hours: '3', deadline: addDays(todayYMD(), 7), priority: 'medium' });
+
+export default function CalendarScreen() {
+  const [tasks, setTasks] = useState([]);
+  const [plan, setPlan] = useState({ days: {}, atRisk: [] });
+  const [form, setForm] = useState(emptyForm);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Load tasks + plan from the same API as the website
+  const load = useCallback(async () => {
+    const [list, newPlan] = await Promise.all([
+      api('/tasks'),
+      api('/tasks/plan', { method: 'POST', body: { maxHoursPerDay: 4, today: todayYMD() } }),
+    ]);
+    setTasks(list);
+    setPlan(newPlan);
+  }, []);
+
+  useEffect(() => {
+    load().catch((err) => Alert.alert('Error', err.message));
+  }, [load]);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    try { await load(); } finally { setRefreshing(false); }
+  };
+
+  // ---- Task actions (after each change: load again, so the plan updates) ----
+  const addTask = async () => {
+    if (!form.title.trim()) return Alert.alert('Please enter a title');
+    try {
+      await api('/tasks', { method: 'POST', body: { ...form, hours: Number(form.hours) || 1 } });
+      setForm(emptyForm());
+      await load();
+    } catch (err) {
+      Alert.alert('Error', err.message);
+    }
+  };
+
+  const toggleDone = async (task) => {
+    await api(`/tasks/${task.id}`, { method: 'PATCH', body: { done: !task.done } });
+    await load();
+  };
+
+  const removeTask = (task) => {
+    Alert.alert('Delete task?', task.title, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => { await api(`/tasks/${task.id}`, { method: 'DELETE' }); await load(); } },
+    ]);
+  };
+
+  // ---- Agenda: every day that has work sessions or deadlines, sorted ----
+  const agenda = {};
+  for (const [day, sessions] of Object.entries(plan.days)) {
+    agenda[day] = sessions.map((s, i) => ({ key: `s${s.taskId}-${i}`, text: `📖 ${s.title}`, hours: s.hours }));
+  }
+  for (const t of tasks.filter((t) => !t.done)) {
+    (agenda[t.deadline] ||= []).push({ key: `d${t.id}`, text: `🏁 ${t.title} is due`, color: t.color });
+  }
+  const days = Object.keys(agenda).filter((d) => d >= todayYMD()).sort().slice(0, 14);
+
+  return (
+    <ScrollView
+      style={styles.page}
+      contentContainerStyle={{ padding: 16 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
+      keyboardShouldPersistTaps="handled"
+    >
+      <Text style={ui.title}>AI Calendar</Text>
+      <Text style={[ui.hint, { marginBottom: 12 }]}>Add a task – your work gets spread out before the deadline.</Text>
+
+      {/* ---- New task ---- */}
+      <View style={[ui.card, { gap: 10 }]}>
+        <TextInput
+          style={ui.input}
+          placeholder="What do you need to do?"
+          value={form.title}
+          onChangeText={(title) => setForm({ ...form, title })}
+        />
+        <View style={styles.row}>
+          <Text style={ui.label}>Hours</Text>
+          <TextInput
+            style={[ui.input, { width: 70 }]}
+            keyboardType="numeric"
+            value={form.hours}
+            onChangeText={(hours) => setForm({ ...form, hours })}
+          />
+          <Text style={[ui.hint, { flex: 1, textAlign: 'right' }]}>Due {formatLong(form.deadline)}</Text>
+        </View>
+        <View style={styles.row}>
+          {QUICK_DEADLINES.map((n) => {
+            const active = form.deadline === addDays(todayYMD(), n);
+            return (
+              <Pressable key={n} style={[ui.chip, active && ui.chipActive]} onPress={() => setForm({ ...form, deadline: addDays(todayYMD(), n) })}>
+                <Text style={[ui.chipText, active && ui.chipTextActive]}>{n} days</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={styles.row}>
+          {PRIORITIES.map((p) => (
+            <Pressable key={p} style={[ui.chip, form.priority === p && ui.chipActive]} onPress={() => setForm({ ...form, priority: p })}>
+              <Text style={[ui.chipText, form.priority === p && ui.chipTextActive]}>{p}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <Pressable style={ui.button} onPress={addTask}>
+          <Text style={ui.buttonText}>+ Add task</Text>
+        </Pressable>
+      </View>
+
+      {/* ---- At-risk warning ---- */}
+      {plan.atRisk.length > 0 && (
+        <View style={[ui.card, { backgroundColor: colors.warnBg }]}>
+          <Text style={{ fontWeight: '600' }}>⚠️ Not enough time before the deadline:</Text>
+          {plan.atRisk.map((r) => (
+            <Text key={r.taskId}>• {r.title}: {r.missingHours}h missing</Text>
+          ))}
+        </View>
+      )}
+
+      {/* ---- Agenda ---- */}
+      <Text style={styles.heading}>Your plan</Text>
+      {days.length === 0 && <Text style={ui.hint}>Nothing planned yet.</Text>}
+      {days.map((day) => (
+        <View key={day} style={ui.card}>
+          <Text style={styles.day}>{formatLong(day)} · {relative(day)}</Text>
+          {agenda[day].map((item) => (
+            <View key={item.key} style={styles.item}>
+              <Text style={[styles.itemText, item.color && { color: item.color, fontWeight: '600' }]}>{item.text}</Text>
+              {item.hours ? <Text style={ui.hint}>{item.hours}h</Text> : null}
+            </View>
+          ))}
+        </View>
+      ))}
+
+      {/* ---- All tasks ---- */}
+      <Text style={styles.heading}>Tasks</Text>
+      {tasks.length === 0 && <Text style={ui.hint}>No tasks yet.</Text>}
+      {tasks.map((t) => (
+        <View key={t.id} style={[ui.card, styles.task, t.done && { opacity: 0.5 }]}>
+          <Pressable onPress={() => toggleDone(t)} style={[styles.check, t.done && { backgroundColor: colors.navy }]}>
+            {t.done ? <Text style={{ color: '#fff' }}>✓</Text> : null}
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.taskTitle, t.done && { textDecorationLine: 'line-through' }]}>{t.title}</Text>
+            <Text style={ui.hint}>{t.hours}h · {t.priority} · due {relative(t.deadline)}</Text>
+          </View>
+          <View style={[styles.dot, { backgroundColor: t.color }]} />
+          <Pressable onPress={() => removeTask(t)} hitSlop={10}>
+            <Text style={{ fontSize: 18, color: colors.muted }}>✕</Text>
+          </Pressable>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  page: { flex: 1, backgroundColor: colors.bg },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  heading: { fontSize: 18, fontWeight: '700', marginVertical: 8 },
+  day: { fontWeight: '700', marginBottom: 6 },
+  item: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
+  itemText: { flex: 1 },
+  task: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  check: { width: 26, height: 26, borderRadius: 6, borderWidth: 2, borderColor: colors.navy, alignItems: 'center', justifyContent: 'center' },
+  taskTitle: { fontWeight: '600', fontSize: 16 },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+});
+```
+
+A month grid is too small for a phone, so we show an **agenda**: the next days, each with its work sessions 📖 and deadlines 🏁.
+
+- the **plan comes from the same server**: `POST /api/tasks/plan` – we didn't write the planner again!
+- **"3 / 7 / 14 / 30 days"** buttons instead of a date picker – faster to tap on a phone
+- `RefreshControl` – **pull down** to reload (like in every app)
+- after every change we call `load()` again, so the plan updates
+
+**📱 Test it:** **Calendar** tab → your tasks from the website are here. Add *"Read paper"*, 4h, 7 days → it appears in the plan, split into sessions. Tick a task as done → the website shows it as done too. **One database, two apps.** 🎉
+
+---
+
+# Part Y – Test the phone app automatically
+
+You can't tap through the app after every change. Tests can – without a phone.
+
+## Y1. Install the test tools
+
+Inside `mobile/`:
+
+```bash
+npm install --save-dev jest-expo jest @testing-library/react-native test-renderer undici
+```
+
+- **jest-expo** – runs React Native code on your laptop
+- **@testing-library/react-native** – *"find the button with this text, press it"*
+- **undici** – a real `fetch`, so the tests talk to your real server
+
+Open **`mobile/package.json`** and add two things: the line `"test": "jest"` inside `"scripts"`, and a new block `"jest": { "preset": "jest-expo" }` at the end.
+
+<details>
+<summary>✅ <b>Checkpoint:</b> your <code>mobile/package.json</code> should now look like this</summary>
+
+Your version numbers may be a little different – that's fine.
+
+```json
+{
+  "name": "mobile",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "expo": "~58.0.22",
+    "expo-secure-store": "~58.0.2",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-maps": "1.29.11",
+    "react-native-safe-area-context": "~5.10.1"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "test": "jest"
+  },
+  "private": true,
+  "devDependencies": {
+    "@testing-library/react-native": "^14.1.0",
+    "jest": "^30.5.2",
+    "jest-expo": "~58.0.13",
+    "test-renderer": "^1.3.1",
+    "undici": "^8.12.3"
+  },
+  "jest": {
+    "preset": "jest-expo"
+  }
+}
+```
+</details>
+
+## Y2. ✍️ The screen test
+
+Create the folder **`mobile/__tests__`** and in it **`mobile/__tests__/app.test.js`**:
+
+```js
+// Screen tests: render the real App and use it like a user would.
+// The app talks to a REAL server – start it first with `npm run dev` in the root folder.
+//   cd mobile && npm test
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { fetch as realFetch } from 'undici';
+import App from '../App';
+
+// The React Native test setup replaces fetch with a fake. We want REAL requests to our server.
+global.fetch = realFetch;
+
+const API = process.env.TEST_API_URL || 'http://localhost:3001';
+
+// Point the app at the local server instead of the live one
+jest.mock('../src/config', () => ({ API_URL: process.env.TEST_API_URL || 'http://localhost:3001' }));
+
+// SecureStore needs a real phone – in tests we keep the token in memory
+jest.mock('expo-secure-store', () => {
+  const store = {};
+  return {
+    getItemAsync: async (k) => store[k] ?? null,
+    setItemAsync: async (k, v) => { store[k] = v; },
+    deleteItemAsync: async (k) => { delete store[k]; },
+  };
+});
+
+// Safe-area sizes come from the phone – use the library's test version
+jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
+
+// Maps need a real phone too – replace them with simple views
+jest.mock('react-native-maps', () => {
+  const React = require('react');
+  const { View, Text } = require('react-native');
+  const MapView = React.forwardRef((props, ref) => {
+    React.useImperativeHandle(ref, () => ({ animateCamera: jest.fn() }));
+    return <View testID="map">{props.children}</View>;
+  });
+  const Marker = ({ title }) => <Text>marker:{title}</Text>;
+  return { __esModule: true, default: MapView, Marker };
+});
+
+jest.setTimeout(30000);
+
+beforeAll(async () => {
+  const res = await fetch(`${API}/api/health`).catch(() => null);
+  if (!res?.ok) throw new Error(`Start the server first (npm run dev in the root folder). No answer from ${API}`);
+});
+
+test('register, see the 3D map with the welcome place, add a task', async () => {
+  const email = `phone-${Date.now()}@test.de`;
+  await render(<App />);
+
+  // 1. Login screen -> switch to "create account"
+  await fireEvent.press(await screen.findByText('Create one'));
+  await fireEvent.changeText(screen.getByPlaceholderText('you@example.com'), email);
+  await fireEvent.changeText(screen.getByPlaceholderText('at least 6 characters'), 'secret123');
+  await fireEvent.press(screen.getByText('Create account'));
+
+  // 2. Logged in: email in the header, map tab with the welcome place
+  expect(await screen.findByText(email)).toBeTruthy();
+  expect(screen.getByTestId('map')).toBeTruthy();
+  expect(await screen.findByText('marker:Brandenburg Gate')).toBeTruthy();
+
+  // 3. Calendar tab: add a task -> it shows up in the task list and in the plan
+  await fireEvent.press(screen.getByText('📅 Calendar'));
+  await fireEvent.changeText(await screen.findByPlaceholderText('What do you need to do?'), 'Phone task');
+  await fireEvent.press(screen.getByText('+ Add task'));
+  await waitFor(() => expect(screen.getAllByText(/Phone task/).length).toBeGreaterThan(1));
+  expect(screen.getAllByText('📖 Phone task').length).toBeGreaterThan(0); // work sessions
+
+  // 4. Log out -> back to the login screen
+  await fireEvent.press(screen.getByText('Log out'));
+  expect(await screen.findByText('👋 Welcome back')).toBeTruthy();
+});
+
+test('wrong password shows the server message', async () => {
+  await render(<App />);
+  await fireEvent.changeText(await screen.findByPlaceholderText('you@example.com'), 'nobody@test.de');
+  await fireEvent.changeText(screen.getByPlaceholderText('at least 6 characters'), 'wrong-password');
+  await fireEvent.press(screen.getByText('Log in'));
+  expect(await screen.findByText('Wrong email or password')).toBeTruthy();
+});
+```
+
+- **`jest.mock(...)`** replaces things that only exist on a real phone (SecureStore, the map, screen insets) with simple fakes
+- the test **renders the real `App`**, types an email, presses *Create account*, checks the map and the calendar – like a user
+- it talks to your **local** server (`localhost:3001`), not the live one, so test accounts don't end up in your real database
+
+## Y3. Run it
+
+Terminal 1, in the **root** folder: `npm run dev` (starts the local server). Terminal 2:
+
+```bash
+cd mobile
 npm test
 ```
 
-👀 **You see:**
+👀 **You see:** `Tests: 2 passed`. *(Yellow "act(...)" warnings are normal here.)*
 
-```
-# tests 11
-# pass 11
-# fail 0
-```
+## Y4. ✍️ GitHub runs the phone tests too
 
-🧪 Break something on purpose: in `server/src/planner.js` change `const SESSION_HOURS = 1.5;` to `3`, run `npm test` → a test fails and tells you which rule broke. Change it back.
-
-## S4. ✍️ Let GitHub run the tests: GitHub Actions
-
-Create the folders **`.github/workflows`** in the root folder and in them the file **`.github/workflows/ci.yml`**:
+Replace **`.github/workflows/ci.yml`** (root folder) with:
 
 ```yaml
 # Runs automatically on GitHub every time someone pushes code.
@@ -503,157 +1077,78 @@ jobs:
       - run: npm ci           # install exactly the versions in package-lock.json
       - run: npm run build    # does the frontend build?
       - run: npm test         # planner + API tests
+
+      # Mobile app: start the API in the background, then test the phone screens against it
+      - name: Mobile app tests
+        run: |
+          npm start -w server &
+          for i in $(seq 1 30); do curl -sf localhost:3001/api/health && break; sleep 1; done
+          cd mobile
+          npm ci
+          npm test
 ```
 
-**CI** (Continuous Integration) = on every `git push`, GitHub starts a fresh computer, installs your project, builds it and runs the tests – with its own throw-away database.
+New last step: start the API in the background, then install and test the mobile app.
 
-Push your code:
+Create **`.vercelignore`** in the **root** folder, so Vercel doesn't upload the phone app with the website:
+
+```
+# The phone app is not part of the website deployment
+mobile
+```
+
+Back in the **root** folder, save and push everything:
 
 ```bash
+cd ..
 git add .
-git commit -m "Lesson 7: ready for Vercel, tests and CI"
+git commit -m "Lesson 8: mobile app"
 git push
 ```
 
-Open your repository on GitHub → tab **Actions**. After about a minute: a green ✅ next to your commit. Red ❌ = click it and read which step failed.
-
-> No GitHub repository of your own yet? Do **T1** below first, then come back.
+GitHub → **Actions** → green ✅ for the website **and** the phone app.
 
 ---
 
-# Part T – Go live
+# 🎉 You built a mobile app!
 
-You do these steps once, in the browser. Keep this page open next to it.
-
-## T1. Put your code on GitHub
-
-Vercel deploys straight from GitHub, so your code must be there.
-
-- **You cloned the course repo?** Make it your own: on GitHub click **New repository** (name: `app-dev-course`, **without** README), then in your project folder:
-
-```bash
-git remote set-url origin https://github.com/YOUR-USERNAME/app-dev-course.git
-git push -u origin --all
-```
-
-- **You built it yourself from Lesson 0?** Create the repository the same way, then:
-
-```bash
-git remote add origin https://github.com/YOUR-USERNAME/app-dev-course.git
-git push -u origin --all
-```
-
-✅ On GitHub you see your files, including **`vercel.json`** and the **`api/`** folder.
-
-> Work on a branch, e.g. `step-7-deploy`? That's fine – remember its name, you need it in T4.
-
-## T2. Create the project on Vercel
-
-1. Go to **https://vercel.com** → **Sign Up** → **Continue with GitHub**.
-2. **Add New… → Project**. In the list, find **app-dev-course** → **Import**.
-   *(Not in the list? Click **Adjust GitHub App Permissions** and allow access to the repository.)*
-3. On the **Configure Project** screen, set exactly:
-
-| Setting | Value |
-|---|---|
-| **Project Name** | anything, e.g. `app-dev-course-yourname` – this becomes your link |
-| **Framework Preset** | **Other** |
-| **Root Directory** | `./` – leave it! **Not** `client` |
-| Build / Output / Install | don't touch – `vercel.json` sets them |
-
-4. Open **Environment Variables** and add one variable:
-   - Key **`JWT_SECRET`**, Value: a new random text from
-
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-5. Click **Deploy**.
-
-👀 After about a minute you get a link. The first version may show *"Server is not configured: DATABASE_URL missing"* when you try to register – correct, there is no database yet.
-
-## T3. Add the database (inside Vercel)
-
-1. In your project, open the tab **Storage** → **Create Database** → **Neon** (Serverless Postgres) → **Continue**.
-2. Plan **Free**, region **Frankfurt (fra1)** or the closest → **Create**.
-3. **Connect Project**: choose your project, tick **Production** and **Preview** → **Connect**.
-
-Vercel now adds **`DATABASE_URL`** (and some other `PG…` variables) to your project automatically. Check it: **Settings → Environment Variables** – you see `DATABASE_URL` and `JWT_SECRET`.
-
-> Want the same data as on your laptop? Copy the connection string from Neon (**Connect**) into your `server/.env` as `DATABASE_URL`.
-
-## T4. Tell Vercel which branch is "live"
-
-Vercel calls the live version **Production**. By default it uses the branch **`main`**.
-
-- Your finished code is on **`main`** → nothing to do.
-- Your finished code is on another branch (e.g. `step-7-deploy`) → **Settings → Environments → Production → Branch Tracking** → enter the branch name → **Save**.
-
-> ⚠️ Branches from older lessons have no `vercel.json` and **will show red ❌ builds** on Vercel. That's expected and harmless – only the production branch matters.
-
-## T5. Deploy again with the database
-
-Environment variables are only read when a version is **built**, so build once more:
-
-**Deployments** → the newest deployment **of your production branch** (check the branch name next to it!) → **⋯** → **Redeploy** → **Redeploy**.
-
-## T6. 👀 Check your live app
-
-Your link is shown on the project page, e.g. `https://app-dev-course-yourname.vercel.app`.
-
-1. **`<your link>/api/health`** → `{"ok":true}` → the Express function runs on Vercel.
-2. **`<your link>`** → login page → **Create one** → register → you're in. 🎉
-3. Add a task, save a place on the map, refresh → still there (Neon!).
-4. Send the link to a classmate: they register and see **their own, empty** calendar.
-
-**Look behind the scenes:** project → **Logs**. You see every API request, and `✅ Database ready` after the first one.
-
-## T7. Troubleshooting
-
-| You see | Why | Fix |
+| | Website | Phone app |
 |---|---|---|
-| `Server is not configured: DATABASE_URL missing` | no database, or not redeployed after adding it | T3, then T5 |
-| `Server is not configured: JWT_SECRET missing` | variable forgotten | **Settings → Environment Variables** → add it → T5 |
-| Build error *"No Output Directory named dist"* or *"…named public"* | wrong **Root Directory**, or you built an old branch without `vercel.json` | Root Directory `./` (**Settings → Build and Deployment**); redeploy the right branch |
-| Classmates see a **Vercel login page** | Deployment Protection is on | **Settings → Deployment Protection → Vercel Authentication** → off for Production, or share the production link (not a preview link) |
-| Page loads, but every action fails | error in the function | project → **Logs** → read the red line |
-| A warning *"SECURITY WARNING: The SSL modes…"* in the logs | only a notice from the `pg` library | nothing to do |
+| Folder | `client/` | `mobile/` |
+| Built with | React + Vite | React Native + Expo |
+| Runs in | the browser | Expo Go (later: App Store / Play Store) |
+| Server, database, login, planner | **shared** | **shared** |
 
-## T8. From now on: push = deploy
+## 🛠️ Troubleshooting
 
-Vercel is connected to GitHub:
-
-- `git push` to your **production branch** → the live version is updated in ~1 minute
-- push to any other branch → a separate **preview** link to test first
-
-Try it: change the heading in `CalendarPage.jsx`, commit, push – GitHub Actions tests it ✅, Vercel deploys it 🚀.
-
----
-
-# 🎉 Your app is live!
-
-You went through the whole life cycle: plan → requirements → design → **build** → **test** → **deploy**. Compare it with the six phases on the [Miro board](https://miro.com/app/board/uXjVHeLSHBw=/?share_link_id=439689196857).
+| You see | Fix |
+|---|---|
+| QR code scanned, but *"Could not connect to development server"* | same Wi-Fi? Otherwise `npx expo start --tunnel` |
+| *"No connection to the server"* | wrong link in `src/config.js` – open `<your link>/api/health` on the phone's browser |
+| *"Server is not configured…"* | your live server misses a variable – Lesson 7, T7 |
+| *"Wrong email or password"* but it works on the website | check the email for a capital letter / space at the end |
+| Red error screen in the app | read the first line – it names the file and line. Fix, save, the app reloads |
+| `npm test`: *"Start the server first"* | run `npm run dev` in the root folder in another terminal |
 
 ## 💪 Bonus exercises
 
-**A.** Add a test: *"a task with a deadline in the past is at risk"*. Run `npm test`.
+**A.** Show a small "👋 Hi, *name*" on the calendar screen. *(Hint: pass `user` from `App.js` as a prop.)*
 
-**B.** Add a status badge to your README: in GitHub → **Actions → CI → ⋯ → Create status badge**.
+**B.** Add a third tab **"Profile"** with your email and the log-out button. *(Hint: one more entry in `TABS`.)*
 
-**C.** Give your app a nicer address: Vercel → **Settings → Domains** → edit the `.vercel.app` name.
+**C.** Use the phone's location: `npx expo install expo-location`, then add `showsUserLocation` to `<MapView>`.
 
-**D.** Make a small change on a new branch, push it, and open the **preview link** Vercel creates. Merge it into `main` when you like it.
+**D.** Put the app on your phone **without** Expo Go: look up **EAS Build** (`npx eas-cli build --profile preview`).
 
 ## 📖 Words you learned
 
 | Word | Meaning |
 |---|---|
-| **Deploy** | put your app on a server so others can use it |
-| **Host / Vercel** | the company whose computers run your app |
-| **Serverless function** | code that starts only when a request comes in |
-| **Build** | turn the source code into optimized files for the browser |
-| **Environment variable** | a setting (like a secret) stored on the host, not in the code |
-| **Rewrite** | a rule that sends a URL to a different file or function |
-| **Unit test / API test** | a program that checks one function / the real server |
-| **CI (GitHub Actions)** | tests run automatically on every push |
-| **Production / Preview** | the real live version / a test version for one branch |
+| **React Native** | React for iPhone and Android apps – real native screens, not a website |
+| **Expo / Expo Go** | tools to build and run React Native apps without Xcode or Android Studio |
+| **`View` / `Text` / `Pressable` / `TextInput`** | the phone's versions of `div`, `p`, `button`, `input` |
+| **`StyleSheet`** | styles as JavaScript objects (camelCase, no units) |
+| **SecureStore** | encrypted storage on the phone (for the token) |
+| **Modal** | a small window on top of the screen |
+| **Mock** | a fake replacement used in tests |
+| **Hot reload** | save a file → the phone updates instantly |
