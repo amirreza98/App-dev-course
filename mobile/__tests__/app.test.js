@@ -23,6 +23,18 @@ jest.mock('expo-secure-store', () => {
   };
 });
 
+// Notifications need a real phone – remember what the app schedules
+const mockScheduled = [];
+jest.mock('expo-notifications', () => ({
+  setNotificationHandler: jest.fn(),
+  setNotificationChannelAsync: jest.fn(),
+  requestPermissionsAsync: async () => ({ granted: true }),
+  cancelAllScheduledNotificationsAsync: async () => { mockScheduled.length = 0; },
+  scheduleNotificationAsync: async (request) => { mockScheduled.push(request); },
+  AndroidImportance: { HIGH: 4 },
+  SchedulableTriggerInputTypes: { DATE: 'date' },
+}));
+
 // Safe-area sizes come from the phone – use the library's test version
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 
@@ -67,7 +79,13 @@ test('register, see the 3D map with the welcome place, add a task', async () => 
   await waitFor(() => expect(screen.getAllByText(/Phone task/).length).toBeGreaterThan(1));
   expect(screen.getAllByText('📖 Phone task').length).toBeGreaterThan(0); // work sessions
 
-  // 4. Log out -> back to the login screen
+  // 4. Turn on reminders -> the phone gets one notification per working day (+ deadline eve)
+  await fireEvent(screen.getByLabelText('Daily reminders'), 'valueChange', true);
+  expect(await screen.findByText(/reminders planned for the next 7 days/)).toBeTruthy();
+  await waitFor(() => expect(mockScheduled.length).toBeGreaterThan(0));
+  expect(mockScheduled[0].content.title).toMatch(/Today: .*h of work/);
+
+  // 5. Log out -> back to the login screen
   await fireEvent.press(screen.getByText('Log out'));
   expect(await screen.findByText('👋 Welcome back')).toBeTruthy();
 });

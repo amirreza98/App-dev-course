@@ -2,11 +2,22 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
 import { api, getToken, setOnLogout, setToken } from './src/api';
 import LoginScreen from './src/screens/LoginScreen';
 import MapScreen from './src/screens/MapScreen';
 import CalendarScreen from './src/screens/CalendarScreen';
 import { colors } from './src/theme';
+
+// Show reminders as a banner even while the app is open
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 const TABS = {
   map: { label: '🗺️ 3D Map', component: MapScreen },

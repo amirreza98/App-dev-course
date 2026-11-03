@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { api } from '../api';
 import { addDays, formatLong, relative, todayYMD } from '../utils/dates';
+import { askPermission, loadSettings, saveSettings, sendTestReminder, syncReminders } from '../reminders';
 import { colors, ui } from '../theme';
 
 const PRIORITIES = ['low', 'medium', 'high'];
 const QUICK_DEADLINES = [3, 7, 14, 30]; // "in X days" buttons instead of a date picker
+const REMINDER_HOURS = [7, 8, 9, 10];
 
 const emptyForm = () => ({ title: '', hours: '3', deadline: addDays(todayYMD(), 7), priority: 'medium' });
 
@@ -14,6 +16,8 @@ export default function CalendarScreen() {
   const [plan, setPlan] = useState({ days: {}, atRisk: [] });
   const [form, setForm] = useState(emptyForm);
   const [refreshing, setRefreshing] = useState(false);
+  const [reminders, setReminders] = useState(null); // settings, e.g. { enabled: true, hour: 8 }
+  const [scheduled, setScheduled] = useState(0);    // how many reminders are waiting
 
   // Load tasks + plan from the same API as the website
   const load = useCallback(async () => {
@@ -28,6 +32,26 @@ export default function CalendarScreen() {
   useEffect(() => {
     load().catch((err) => Alert.alert('Error', err.message));
   }, [load]);
+
+  // Reminders: load the saved settings once ...
+  useEffect(() => {
+    loadSettings().then(setReminders);
+  }, []);
+
+  // ... and re-schedule them whenever the plan or the settings change
+  useEffect(() => {
+    if (!reminders) return;
+    syncReminders(plan, tasks, reminders).then(setScheduled).catch(console.warn);
+  }, [plan, tasks, reminders]);
+
+  const updateReminders = async (changes) => {
+    const next = { ...reminders, ...changes };
+    if (changes.enabled && !(await askPermission())) {
+      return Alert.alert('Notifications are off', 'Allow notifications for Expo Go in your phone settings.');
+    }
+    setReminders(next);
+    await saveSettings(next);
+  };
 
   const refresh = async () => {
     setRefreshing(true);
@@ -117,6 +141,36 @@ export default function CalendarScreen() {
           <Text style={ui.buttonText}>+ Add task</Text>
         </Pressable>
       </View>
+
+      {/* ---- Reminders ---- */}
+      {reminders && (
+        <View style={[ui.card, { gap: 10 }]}>
+          <View style={styles.row}>
+            <Text style={{ flex: 1, fontWeight: '600', fontSize: 16 }}>🔔 Daily reminders</Text>
+            <Switch
+              accessibilityLabel="Daily reminders"
+              value={reminders.enabled}
+              onValueChange={(enabled) => updateReminders({ enabled })}
+            />
+          </View>
+          {reminders.enabled && (
+            <>
+              <View style={styles.row}>
+                <Text style={ui.label}>Every morning at</Text>
+                {REMINDER_HOURS.map((h) => (
+                  <Pressable key={h} style={[ui.chip, reminders.hour === h && ui.chipActive]} onPress={() => updateReminders({ hour: h })}>
+                    <Text style={[ui.chipText, reminders.hour === h && ui.chipTextActive]}>{h}:00</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={ui.hint}>{scheduled} reminders planned for the next 7 days</Text>
+              <Pressable onPress={sendTestReminder}>
+                <Text style={[ui.chipText, { textDecorationLine: 'underline' }]}>Send a test reminder now</Text>
+              </Pressable>
+            </>
+          )}
+        </View>
+      )}
 
       {/* ---- At-risk warning ---- */}
       {plan.atRisk.length > 0 && (
