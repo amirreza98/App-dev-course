@@ -11,7 +11,8 @@ export default function CalendarPage() {
   const [month, setMonth] = useState(() => new Date()); // which month the calendar shows
   const [selected, setSelected] = useState(todayYMD()); // which day is clicked
   const [plan, setPlan] = useState({ source: '', days: {}, atRisk: [] });
-    const [maxHoursPerDay, setMaxHoursPerDay] = useState(4); // daily work limit
+  const [maxHoursPerDay, setMaxHoursPerDay] = useState(4); // daily work limit
+  const [aiLoading, setAiLoading] = useState(false);
 
   // Load tasks once
   useEffect(() => {
@@ -31,6 +32,11 @@ export default function CalendarPage() {
   useEffect(() => {
     fetchPlan().catch(console.error);
   }, [tasks, fetchPlan]);
+
+  const planWithAi = async () => {
+    setAiLoading(true);
+    try { await fetchPlan(true); } finally { setAiLoading(false); }
+  };
 
   // ---- Task actions ----
   const addTask = async (e) => {
@@ -138,6 +144,7 @@ export default function CalendarPage() {
         {nextDeadline && (
           <p className="hint">Next deadline: <b>{nextDeadline.title}</b> {relative(nextDeadline.deadline)}</p>
         )}
+
         {plan.atRisk.length > 0 && (
           <div className="warning">
             ⚠️ Not enough time for:
@@ -154,7 +161,11 @@ export default function CalendarPage() {
             <input type="number" min="1" max="12" value={maxHoursPerDay}
               onChange={(e) => setMaxHoursPerDay(e.target.value)} />
           </label>
+          <button onClick={planWithAi} disabled={!open.length || aiLoading}>
+            {aiLoading ? 'Thinking…' : '✨ Re-plan with AI'}
+          </button>
         </div>
+        {plan.source && <p className="hint">Current plan: {plan.source}</p>}
 
         <h3>Tasks</h3>
         {!tasks.length && <p className="hint">No tasks yet.</p>}

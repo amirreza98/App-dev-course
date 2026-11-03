@@ -10,10 +10,14 @@ We build two apps **step by step, with our own hands**: a 🗺️ **3D Map** and
 | [0 · Your first React app](https://github.com/amirreza98/App-dev-course/tree/main#readme) | `main` | ~45 min |
 | [1 · React basics](https://github.com/amirreza98/App-dev-course/tree/step-1-react#readme) | `step-1-react` | ~60 min |
 | [2 · Backend](https://github.com/amirreza98/App-dev-course/tree/step-2-backend#readme) | `step-2-backend` | ~60 min |
-| [3 · Calendar](https://github.com/amirreza98/App-dev-course/tree/step-3-calendar#readme) **📍 you are here** | `step-3-calendar` | ~50 min |
+| [3 · Calendar](https://github.com/amirreza98/App-dev-course/tree/step-3-calendar#readme) | `step-3-calendar` | ~50 min |
 | [4 · Planner + AI](https://github.com/amirreza98/App-dev-course/tree/step-4-planner#readme) | `step-4-planner` | ~50 min |
 | [5 · Database](https://github.com/amirreza98/App-dev-course/tree/step-5-database#readme) | `step-5-database` | ~60 min |
 | [6 · Login](https://github.com/amirreza98/App-dev-course/tree/step-6-auth#readme) | `step-6-auth` | ~70 min |
+| [7 · Go live](https://github.com/amirreza98/App-dev-course/tree/step-7-deploy#readme) **📍 you are here** | `step-7-deploy` | ~75 min |
+| [8 · Mobile app](https://github.com/amirreza98/App-dev-course/tree/step-8-mobile#readme) | `step-8-mobile` | ~3 h |
+| [9 · Reminders](https://github.com/amirreza98/App-dev-course/tree/step-9-reminders#readme) | `step-9-reminders` | ~60 min |
+| [10 · Campus 3D + VR](https://github.com/amirreza98/App-dev-course/tree/step-10-campus-3d#readme) | `step-10-campus-3d` | ~90 min |
 
 **How it works:** this page is the tutorial for this step. Follow it from top to bottom: create, replace or delete exactly the files it tells you → **save** → look at the browser. **Lesson 0 starts from an empty folder**, and every lesson continues in your own code – reading the lessons in order is all you need. The branch holds the **finished code** of the step, so you can compare or catch up.
 
@@ -35,1076 +39,628 @@ Open **http://localhost:5173**. Stop the app with **Control + C**. From step 5 o
 
 ---
 
-# Lesson 3 – Calendar: a month view with all deadlines
+# Lesson 7 – Go live: deploy to Vercel (+ automatic tests)
 
 | | |
 |---|---|
-| ⏱️ Time | ~50 min |
-| 🏁 Start from | your code from Lesson 2 (or `git checkout -f step-2-backend && npm install`) |
-| ✅ Finished result | branch `step-3-calendar` |
-| 🎯 You will | build a month calendar from scratch, show every deadline on it, and mark tasks as done |
+| ⏱️ Time | ~75 min |
+| 🏁 Start from | your code from Lesson 6 (or `git checkout -f step-7-deploy` for the finished result) |
+| ✅ Finished result | branch `step-7-deploy` |
+| 🎯 You will | put the app on the internet with a real link, and let GitHub test every change automatically |
 
-> 🆘 **Stuck or behind?** Run `git checkout -f step-3-calendar && npm install` to get the finished code of this lesson.
-
----
-
-## G1. ✍️ Server: priority, colour and "done"
-
-Open **`server/src/routes/tasks.js`**.
-
-**1.** Under `const router = Router();`, add two lists:
-
-```js
-const COLORS = ['#4361ee', '#e63946', '#2a9d8f', '#f4a261', '#9b5de5', '#06aed5', '#e76f51', '#588157'];
-const PRIORITIES = ['low', 'medium', 'high'];
-```
-
-**2.** Replace the `POST` route with:
-
-```js
-// POST /api/tasks -> create a task. Body: { title, deadline, hours, priority }
-router.post('/', (req, res) => {
-  const { title, deadline, hours, priority = 'medium' } = req.body;
-  if (!title || !deadline || !hours) {
-    return res.status(400).json({ error: 'title, deadline and hours are required' });
-  }
-  const id = nextId++;
-  const task = {
-    id,
-    title,
-    deadline,
-    hours: Number(hours),
-    priority: PRIORITIES.includes(priority) ? priority : 'medium',
-    color: COLORS[(id - 1) % COLORS.length],
-    done: false,
-  };
-  tasks.push(task);
-  res.status(201).json(task);
-});
-```
-
-**3.** Add a new route **above** the `DELETE` route:
-
-```js
-// PATCH /api/tasks/:id -> change some fields, e.g. { done: true } or { priority: 'high' }
-router.patch('/:id', (req, res) => {
-  const task = tasks.find((t) => t.id === Number(req.params.id));
-  if (!task) return res.status(404).json({ error: 'Task not found' });
-  const { title, deadline, hours, priority, done } = req.body;
-  if (title !== undefined) task.title = title;
-  if (deadline !== undefined) task.deadline = deadline;
-  if (hours !== undefined) task.hours = Number(hours);
-  if (PRIORITIES.includes(priority)) task.priority = priority;
-  if (done !== undefined) task.done = Boolean(done);
-  res.json(task);
-});
-```
-
-The server restarted by itself (and forgot all tasks – memory!). Add a task in the app, then open **http://localhost:3001/api/tasks**.
-👀 **You see:** the task now also has `"priority"`, `"color"` and `"done": false`.
-
-<details>
-<summary>✅ <b>Checkpoint:</b> your <code>server/src/routes/tasks.js</code> should now look like this</summary>
-
-```js
-import { Router } from 'express';
-
-const router = Router();
-
-const COLORS = ['#4361ee', '#e63946', '#2a9d8f', '#f4a261', '#9b5de5', '#06aed5', '#e76f51', '#588157'];
-const PRIORITIES = ['low', 'medium', 'high'];
-
-// In-memory "database" — resets when the server restarts.
-// Next level: replace this array with a real database (MongoDB / PostgreSQL).
-let tasks = [];
-let nextId = 1;
-
-// GET /api/tasks -> list all tasks
-router.get('/', (req, res) => res.json(tasks));
-
-// POST /api/tasks -> create a task. Body: { title, deadline, hours, priority }
-router.post('/', (req, res) => {
-  const { title, deadline, hours, priority = 'medium' } = req.body;
-  if (!title || !deadline || !hours) {
-    return res.status(400).json({ error: 'title, deadline and hours are required' });
-  }
-  const id = nextId++;
-  const task = {
-    id,
-    title,
-    deadline,
-    hours: Number(hours),
-    priority: PRIORITIES.includes(priority) ? priority : 'medium',
-    color: COLORS[(id - 1) % COLORS.length],
-    done: false,
-  };
-  tasks.push(task);
-  res.status(201).json(task);
-});
-
-// PATCH /api/tasks/:id -> change some fields, e.g. { done: true } or { priority: 'high' }
-router.patch('/:id', (req, res) => {
-  const task = tasks.find((t) => t.id === Number(req.params.id));
-  if (!task) return res.status(404).json({ error: 'Task not found' });
-  const { title, deadline, hours, priority, done } = req.body;
-  if (title !== undefined) task.title = title;
-  if (deadline !== undefined) task.deadline = deadline;
-  if (hours !== undefined) task.hours = Number(hours);
-  if (PRIORITIES.includes(priority)) task.priority = priority;
-  if (done !== undefined) task.done = Boolean(done);
-  res.json(task);
-});
-
-// DELETE /api/tasks/:id -> remove a task
-router.delete('/:id', (req, res) => {
-  tasks = tasks.filter((t) => t.id !== Number(req.params.id));
-  res.status(204).end();
-});
-
-export default router;
-```
-</details>
-
-### 💡 What's new?
-
-- `priority = 'medium'` – a **default value**: if the frontend sends no priority, use `'medium'`
-- `COLORS[(id - 1) % COLORS.length]` – each task gets the next colour. `%` (modulo) is the remainder of a division, so after colour 8 we start again at 1
-- **`PATCH`** = *change some fields* of something that exists. We'll use it to tick a task as done: `PATCH /api/tasks/3` with `{ "done": true }`
-- `.find()` returns the first task with that id (or `undefined` → `404 Not Found`)
+> 🆘 **Stuck or behind?** Run `git checkout -f step-7-deploy && npm install`. You still need your own `server/.env` (Lessons 5 and 6).
 
 ---
 
-## G2. ✍️ Date helpers
+## 💡 From "my laptop" to "the internet"
 
-Dates are tricky. We keep all date code in one file. Create the folder **`client/src/utils`** and the file **`client/src/utils/dates.js`**:
+Today the app only runs while **your** laptop runs `npm run dev`. To share it, we need a computer that is always on: a **host**. We use **Vercel** (free for students).
 
-```js
-// Date helpers that work with 'YYYY-MM-DD' strings in the user's LOCAL time zone.
-
-const pad = (n) => String(n).padStart(2, '0');
-
-export const toYMD = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
-export const fromYMD = (s) => {
-  const [y, m, d] = s.split('-').map(Number);
-  return new Date(y, m - 1, d);
-};
-
-export const todayYMD = () => toYMD(new Date());
-
-export const addDays = (ymd, n) => {
-  const d = fromYMD(ymd);
-  d.setDate(d.getDate() + n);
-  return toYMD(d);
-};
-
-export const daysBetween = (fromYmd, toYmd) =>
-  Math.round((fromYMD(toYmd) - fromYMD(fromYmd)) / 86_400_000);
-
-// All cells for a month grid, weeks starting on Monday (6 rows x 7 days)
-export function monthGrid(year, month) {
-  const first = new Date(year, month, 1);
-  const offset = (first.getDay() + 6) % 7; // Monday = 0
-  const start = new Date(year, month, 1 - offset);
-  return Array.from({ length: 42 }, (_, i) => {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    return { ymd: toYMD(d), day: d.getDate(), inMonth: d.getMonth() === month };
-  });
-}
-
-export const formatLong = (ymd) =>
-  fromYMD(ymd).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
-
-export const relative = (ymd) => {
-  const n = daysBetween(todayYMD(), ymd);
-  if (n < 0) return `${-n}d overdue`;
-  if (n === 0) return 'today';
-  if (n === 1) return 'tomorrow';
-  return `in ${n} days`;
-};
-```
-
-Nothing changes on screen – these are tools for the next blocks. The important ones:
-
-| Function | Example | Result |
+| | On your laptop | On Vercel |
 |---|---|---|
-| `todayYMD()` | | `'2026-10-26'` |
-| `addDays(ymd, n)` | `addDays('2026-10-30', 3)` | `'2026-11-02'` |
-| `relative(ymd)` | a date 3 days from now | `'in 3 days'` |
-| `formatLong(ymd)` | `'2026-10-26'` | `'Monday, October 26'` |
-| `monthGrid(year, month)` | October 2026 | the 42 boxes of the calendar (next block) |
+| Frontend | Vite dev server (`:5173`) | the built files (`npm run build` → `client/dist`) |
+| Backend | `node src/index.js` runs all the time | a **serverless function**: starts only when a request comes in |
+| Database | Neon | **the same** Neon |
+| Secrets | `server/.env` | Vercel → **Environment Variables** |
 
-💡 We store dates as text `'YYYY-MM-DD'`: easy to compare and sort (`'2026-10-29' < '2026-11-01'` is `true`).
-⚠️ JavaScript quirk: `getMonth()` counts from **0** (January = 0). That's why you see `+ 1` and `- 1`.
-
-### 💡 How `monthGrid` works
-
-A month calendar always shows **6 weeks × 7 days = 42 boxes**, starting on a Monday:
+**Serverless** means: no server waits all day. Vercel starts our Express app for a request, answers, and may stop it again. So our code must **not** call `app.listen()` itself on Vercel – Vercel does the listening.
 
 ```
-October 2026 – the 1st is a Thursday → go back 3 days → start on Mon 28 Sept
-Mon Tue Wed Thu Fri Sat Sun
- 28  29  30   1   2   3   4
-  5   6   7   8 …
+Browser ──▶ app-dev-course-xyz.vercel.app
+             ├── /            → client/dist/index.html (React)
+             └── /api/...     → api/index.js → our Express app → Neon
 ```
-
-For each of the 42 days it returns `{ ymd: '2026-09-28', day: 28, inMonth: false }`. `inMonth` tells us whether to show it grey.
 
 ---
 
-## G3. ✍️ A calendar component
+# Part R – Make the server ready for Vercel
 
-The calendar is a big piece, so it gets **its own component in its own file**. Create the folder **`client/src/components`** and the file **`client/src/components/MonthCalendar.jsx`**:
+## R1. ✍️ Split the app from `listen()`
 
-```jsx
-import { monthGrid } from '../utils/dates.js';
-
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-export default function MonthCalendar({ month }) {
-  const year = month.getFullYear();
-  const m = month.getMonth();
-  const cells = monthGrid(year, m);
-
-  const title = month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-
-  return (
-    <div className="cal">
-      <div className="cal-header">
-        <h3>{title}</h3>
-      </div>
-
-      <div className="cal-grid">
-        {WEEKDAYS.map((w) => <div key={w} className="cal-weekday">{w}</div>)}
-
-        {cells.map(({ ymd, day, inMonth }) => (
-          <div key={ymd} className={inMonth ? 'cal-cell' : 'cal-cell muted'}>
-            <div className="cal-day">
-              <span>{day}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-```
-
-Now use it on the calendar page, in a two-column layout. Open **`client/src/pages/CalendarPage.jsx`**:
-
-**1.** Import it at the top:
-
-```jsx
-import MonthCalendar from '../components/MonthCalendar.jsx';
-```
-
-**2.** Change the outer `<div className="simple-page">` to `<div className="cal-page">`, and wrap everything that's inside it in a `<section className="cal-side">`. Then add a second section with the calendar. The JSX should have this shape:
-
-```jsx
-  return (
-    <div className="cal-page">
-      {/* ---------- Left column ---------- */}
-      <section className="cal-side">
-        {/* ...everything that was there before: h2, hint, form, h3, list... */}
-      </section>
-
-      {/* ---------- Right column ---------- */}
-      <section className="cal-main">
-        <MonthCalendar month={new Date()} />
-      </section>
-    </div>
-  );
-```
-
-👀 **You see:** tasks on the left, a calendar of the current month on the right!
-
-### 💡 Props: giving data to a component
-
-```jsx
-<MonthCalendar month={new Date()} />
-```
-
-```jsx
-export default function MonthCalendar({ month }) {
-```
-
-`month={...}` is a **prop** (property). It works like an argument to a function: the page gives data **down** to the calendar. The calendar uses it to know which month to draw.
-
-🧱 Components are LEGO bricks – props are how they connect.
-
----
-
-## G4. ✍️ Switch months
-
-The page should **remember** which month is shown – that's state. And the calendar needs a way to **tell** the page *"go to the next month"*.
-
-**In `CalendarPage.jsx`:** add a state under the other `useState` lines, and pass two props:
-
-```jsx
-  const [month, setMonth] = useState(() => new Date()); // which month the calendar shows
-```
-
-```jsx
-        <MonthCalendar month={month} onMonthChange={setMonth} />
-```
-
-**In `MonthCalendar.jsx`:**
-
-**1.** Accept the new prop:
-
-```jsx
-export default function MonthCalendar({ month, onMonthChange }) {
-```
-
-**2.** Above `const title = ...`, add:
-
-```jsx
-  const shift = (n) => onMonthChange(new Date(year, m + n, 1));
-```
-
-**3.** Replace the `cal-header` div with:
-
-```jsx
-      <div className="cal-header">
-        <button onClick={() => shift(-1)}>‹</button>
-        <h3>{title}</h3>
-        <button onClick={() => shift(1)}>›</button>
-        <button className="ghost" onClick={() => onMonthChange(new Date())}>
-          Today
-        </button>
-      </div>
-```
-
-👀 **You see:** **‹** and **›** switch months, **Today** jumps back.
-
-### 💡 A function as a prop
-
-`onMonthChange={setMonth}` – we pass a **function** down. When you click **›**:
-
-```
-calendar: shift(1) → onMonthChange(November) → page: setMonth(November) → page redraws → calendar gets month = November
-```
-
-The state lives in the **page**, the calendar just shows it and reports clicks. This is called **lifting state up** – the page will need `month` again soon.
-
-`new Date(year, m + 1, 1)` – JavaScript is smart: month 12 automatically becomes January of the next year.
-
----
-
-## G5. ✍️ Deadlines on the calendar
-
-The calendar doesn't want a *list of tasks*. It wants to know *"what happens on each day?"*:
+Create **`server/src/app.js`** – the whole Express app, but **without** `app.listen()`:
 
 ```js
-// tasks (what we store)                       events (what the calendar needs)
-[{ title: 'Exam', deadline: '2026-10-29' }]  →  { '2026-10-29': [{ label: 'Exam', ... }] }
+import express from 'express';
+import cors from 'cors';
+import { initDb, missingSettings } from './db.js';
+import { requireAuth } from './middleware/auth.js';
+import authRouter from './routes/auth.js';
+import placesRouter from './routes/places.js';
+import tasksRouter from './routes/tasks.js';
+
+// The Express app – WITHOUT app.listen().
+// Locally index.js starts it; on Vercel, api/index.js hands it to Vercel.
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+app.get('/api/health', (req, res) => res.json({ ok: true }));
+
+// Before every other API request: settings present? tables created?
+app.use('/api', async (req, res, next) => {
+  const missing = missingSettings();
+  if (missing.length) {
+    return res.status(500).json({ error: `Server is not configured: ${missing.join(', ')} missing` });
+  }
+  await initDb(); // fast after the first time
+  next();
+});
+
+// Login and registration – open to everyone
+app.use('/api/auth', authRouter);
+
+// Project 1: 3D Map – only for logged-in users
+app.use('/api/places', requireAuth, placesRouter);
+
+// Project 2: AI Calendar – only for logged-in users
+app.use('/api/tasks', requireAuth, tasksRouter);
+
+// If something fails, answer with a clear error instead of crashing
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: 'Something went wrong on the server' });
+});
+
+export default app;
 ```
 
-**In `CalendarPage.jsx`:**
+- `export default app` – other files can now use the app
+- the new middleware on `/api` checks the settings and creates the tables **on the first request**. On Vercel there is no "server start", so this is the right moment.
+- if a setting is missing, you get a clear message like *"Server is not configured: DATABASE_URL missing"* instead of a crash
 
-**1.** Add `useMemo` to the React import:
+Replace **`server/src/index.js`** with – it is now only for your laptop:
 
-```jsx
-import { useEffect, useMemo, useState } from 'react';
+```js
+// Local development: check the settings, prepare the database, start listening.
+import app from './app.js';
+import { initDb, missingSettings } from './db.js';
+
+const missing = missingSettings();
+if (missing.length) {
+  console.error(`❌ Missing in server/.env: ${missing.join(', ')} (see server/.env.example)`);
+  process.exit(1);
+}
+
+try {
+  await initDb();
+} catch (err) {
+  console.error('❌ Could not connect to the database. Check DATABASE_URL in server/.env');
+  console.error(err.message);
+  process.exit(1);
+}
+
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`));
 ```
 
-**2.** Just **before** `return (`, add:
+## R2. ✍️ No more `process.exit()` in `db.js`
 
-```jsx
-  // Turn tasks into calendar events: { 'YYYY-MM-DD': [event, ...] }
-  const events = useMemo(() => {
-    const ev = {};
-    for (const t of tasks) {
-      (ev[t.deadline] ||= []).push({
-        key: `d-${t.id}`, kind: 'deadline', label: t.title, color: t.color, done: t.done, task: t,
-      });
-    }
-    return ev;
-  }, [tasks]);
-```
+On Vercel, stopping the process would kill every request. Replace **`server/src/db.js`** with:
 
-**3.** Pass it to the calendar:
+```js
+import pg from 'pg';
 
-```jsx
-        <MonthCalendar month={month} onMonthChange={setMonth} events={events} />
-```
+// Locally, settings come from server/.env. On Vercel they come from the project's
+// "Environment Variables" – there is no .env file there, and that's fine.
+try { process.loadEnvFile(); } catch { /* no .env file */ }
 
-**In `MonthCalendar.jsx`:**
+// Which required settings are missing? (empty list = all good)
+export const missingSettings = () => ['DATABASE_URL', 'JWT_SECRET'].filter((name) => !process.env[name]);
 
-**1.** Under `WEEKDAYS`, add `const MAX_CHIPS = 3;` and accept the prop: `({ month, onMonthChange, events })`
+// Return DATE columns as plain 'YYYY-MM-DD' text (not JavaScript Date objects)
+pg.types.setTypeParser(1082, (value) => value);
 
-**2.** Replace the `cells.map(...)` part with:
+// A pool keeps a few connections open and reuses them for every query
+export const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
-```jsx
-        {cells.map(({ ymd, day, inMonth }) => {
-          const list = events[ymd] || [];
+// Create the tables once. On Vercel the server starts again and again,
+// so we remember the result and only do it the first time.
+let ready = null;
+export function initDb() {
+  if (!ready) ready = createTables().catch((err) => { ready = null; throw err; });
+  return ready;
+}
 
-          return (
-            <div key={ymd} className={inMonth ? 'cal-cell' : 'cal-cell muted'}>
-              <div className="cal-day">
-                <span>{day}</span>
-              </div>
-              {list.slice(0, MAX_CHIPS).map((e) => (
-                <div
-                  key={e.key}
-                  className={`chip deadline ${e.done ? 'done' : ''}`}
-                  style={{ background: e.color }}
-                  title={e.label}
-                >
-                  🏁 {e.label}
-                </div>
-              ))}
-              {list.length > MAX_CHIPS && <div className="chip more">+{list.length - MAX_CHIPS} more</div>}
-            </div>
-          );
-        })}
-```
+async function createTables() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id            SERIAL PRIMARY KEY,
+      email         TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
 
-👀 **You see:** add a task → a coloured **🏁 chip** appears on its deadline day! Try a deadline next month, then click **›**.
+    CREATE TABLE IF NOT EXISTS places (
+      id   SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      lng  DOUBLE PRECISION NOT NULL,
+      lat  DOUBLE PRECISION NOT NULL
+    );
 
-### 💡 What's new?
+    CREATE TABLE IF NOT EXISTS tasks (
+      id       SERIAL PRIMARY KEY,
+      title    TEXT NOT NULL,
+      deadline DATE NOT NULL,
+      hours    REAL NOT NULL,
+      priority TEXT NOT NULL DEFAULT 'medium',
+      done     BOOLEAN NOT NULL DEFAULT false
+    );
 
-- **Derived data:** `events` is *calculated* from `tasks`, not stored separately. One source of truth
-- **`useMemo`** remembers the result and only recalculates when `tasks` changes
-- `(ev[t.deadline] ||= [])` – *"if this day has no list yet, create an empty one"*, then `.push` into it
-- `events[ymd] || []` – the events of this day, or an empty list
-- `style={{ background: e.color }}` – a style from JavaScript. Two `{{ }}`: one for "JavaScript here", one for the object
-- `list.slice(0, 3)` – show max 3 chips, the rest becomes *"+2 more"*
-
-<details>
-<summary>📄 <code>MonthCalendar.jsx</code> so far</summary>
-
-```jsx
-import { monthGrid } from '../utils/dates.js';
-
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const MAX_CHIPS = 3;
-
-export default function MonthCalendar({ month, onMonthChange, events }) {
-  const year = month.getFullYear();
-  const m = month.getMonth();
-  const cells = monthGrid(year, m);
-
-  const shift = (n) => onMonthChange(new Date(year, m + n, 1));
-  const title = month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-
-  return (
-    <div className="cal">
-      <div className="cal-header">
-        <button onClick={() => shift(-1)}>‹</button>
-        <h3>{title}</h3>
-        <button onClick={() => shift(1)}>›</button>
-        <button className="ghost" onClick={() => onMonthChange(new Date())}>
-          Today
-        </button>
-      </div>
-
-      <div className="cal-grid">
-        {WEEKDAYS.map((w) => <div key={w} className="cal-weekday">{w}</div>)}
-
-        {cells.map(({ ymd, day, inMonth }) => {
-          const list = events[ymd] || [];
-
-          return (
-            <div key={ymd} className={inMonth ? 'cal-cell' : 'cal-cell muted'}>
-              <div className="cal-day">
-                <span>{day}</span>
-              </div>
-              {list.slice(0, MAX_CHIPS).map((e) => (
-                <div
-                  key={e.key}
-                  className={`chip deadline ${e.done ? 'done' : ''}`}
-                  style={{ background: e.color }}
-                  title={e.label}
-                >
-                  🏁 {e.label}
-                </div>
-              ))}
-              {list.length > MAX_CHIPS && <div className="chip more">+{list.length - MAX_CHIPS} more</div>}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+    -- Every place and task now belongs to one user
+    ALTER TABLE places ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+    ALTER TABLE tasks  ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+  `);
+  console.log('✅ Database ready');
 }
 ```
-</details>
+
+- `missingSettings()` only **reports** missing settings – `index.js` (laptop) and `app.js` (Vercel) decide what to do
+- `initDb()` remembers its result (`ready`), so the tables are created only once
+
+**👀 Test it:** `npm run dev` → the app works exactly as before. Nothing changed for the user – only the structure.
+
+## R3. ✍️ The Vercel function and settings
+
+Create the folder **`api`** in the **root** folder (next to `client/` and `server/`) and in it the file **`api/index.js`**:
+
+```js
+// Vercel turns every file in the api/ folder into a serverless function.
+// This one simply hands every /api/... request to our Express app.
+import app from '../server/src/app.js';
+
+export default app;
+```
+
+Vercel turns **every file in `api/`** into a serverless function. This one just hands over our Express app.
+
+Create **`vercel.json`** in the **root** folder:
+
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "outputDirectory": "client/dist",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
+```
+
+- `buildCommand` / `outputDirectory` – build the React app and serve `client/dist`
+- **rewrites**: every `/api/...` request goes to our function; every other address gets `index.html`, so React can show the page
 
 ---
 
-## G6. ✍️ Click a day, highlight today
+# Part S – Automatic tests
 
-**In `CalendarPage.jsx`:**
+## 💡 Why tests?
 
-**1.** Import two date helpers:
+Every time you change something, you could break something else. Clicking through the whole app by hand after every change takes forever. **Tests** are small programs that check your code for you – in a second.
 
-```jsx
-import { formatLong, todayYMD } from '../utils/dates.js';
+- **Unit test** – checks one function alone (our planner)
+- **API test** – starts the real server and sends real requests
+
+## S1. ✍️ Test the planner
+
+Create the folder **`server/test`** and in it the file **`server/test/planner.test.js`**:
+
+```js
+// Unit tests: check the planner rules without a server or database.
+// Run with:  npm test
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { ruleBasedPlan } from '../src/planner.js';
+
+const TODAY = '2026-11-02';
+const task = (id, deadline, hours, priority = 'medium') => ({ id, title: `Task ${id}`, deadline, hours, priority });
+
+// Helper: all sessions of the plan as one flat list
+const sessions = (plan) => Object.entries(plan.days).flatMap(([day, list]) => list.map((s) => ({ day, ...s })));
+
+test('plans all hours of a task', () => {
+  const plan = ruleBasedPlan([task(1, '2026-11-08', 6)], { today: TODAY });
+  const total = sessions(plan).reduce((sum, s) => sum + s.hours, 0);
+  assert.equal(total, 6);
+  assert.deepEqual(plan.atRisk, []);
+});
+
+test('never plans work on the deadline day or later', () => {
+  const plan = ruleBasedPlan([task(1, '2026-11-05', 4)], { today: TODAY });
+  for (const s of sessions(plan)) assert.ok(s.day < '2026-11-05', `session on ${s.day}`);
+});
+
+test('spreads work over several days (not everything today)', () => {
+  const plan = ruleBasedPlan([task(1, '2026-11-08', 6)], { today: TODAY });
+  assert.ok(Object.keys(plan.days).length >= 3);
+});
+
+test('sessions are at most 1.5 hours', () => {
+  const plan = ruleBasedPlan([task(1, '2026-11-04', 6)], { maxHoursPerDay: 6, today: TODAY });
+  for (const s of sessions(plan)) assert.ok(s.hours <= 1.5, `${s.hours}h session`);
+});
+
+test('respects the daily limit', () => {
+  const plan = ruleBasedPlan([task(1, '2026-11-06', 8), task(2, '2026-11-06', 8)], { maxHoursPerDay: 3, today: TODAY });
+  for (const [day, list] of Object.entries(plan.days)) {
+    const hours = list.reduce((sum, s) => sum + s.hours, 0);
+    assert.ok(hours <= 3, `${hours}h on ${day}`);
+  }
+});
+
+test('warns when a task does not fit', () => {
+  const plan = ruleBasedPlan([task(1, '2026-11-03', 10)], { maxHoursPerDay: 4, today: TODAY });
+  assert.equal(plan.atRisk.length, 1);
+  assert.equal(plan.atRisk[0].missingHours, 6);
+});
 ```
 
-**2.** Add a state for the clicked day (under `month`):
+- `test('name', () => { ... })` – one test = one rule of the planner
+- `assert.equal(a, b)` – *"a must be b, otherwise the test fails"*
+- the tests use a fixed `TODAY`, so they give the same result every day
 
-```jsx
-  const [selected, setSelected] = useState(todayYMD()); // which day is clicked
+## S2. ✍️ Test the API
+
+Create **`server/test/api.test.js`**:
+
+```js
+// API tests: start the real Express app and send real HTTP requests.
+// Needs DATABASE_URL and JWT_SECRET (from server/.env, or from GitHub Actions).
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import app from '../src/app.js';
+import { pool } from '../src/db.js';
+
+let server, base;
+
+before(async () => {
+  server = app.listen(0);                                   // 0 = any free port
+  await new Promise((resolve) => server.once('listening', resolve));
+  base = `http://localhost:${server.address().port}/api`;
+});
+
+after(async () => {
+  server.close();
+  await pool.end();
+});
+
+// Small helper: send a request, return { status, body }
+async function call(method, path, body, token) {
+  const res = await fetch(base + path, {
+    method,
+    headers: {
+      ...(body && { 'Content-Type': 'application/json' }),
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+    body: body && JSON.stringify(body),
+  });
+  return { status: res.status, body: res.status === 204 ? null : await res.json() };
+}
+
+const email = (name) => `${name}-${Date.now()}@test.de`;
+
+test('health check works', async () => {
+  const res = await call('GET', '/health');
+  assert.equal(res.status, 200);
+});
+
+test('tasks need a login', async () => {
+  const res = await call('GET', '/tasks');
+  assert.equal(res.status, 401);
+});
+
+test('register, create a task, and read it back', async () => {
+  const reg = await call('POST', '/auth/register', { email: email('lena'), password: 'secret123' });
+  assert.equal(reg.status, 201);
+  const token = reg.body.token;
+
+  const created = await call('POST', '/tasks', { title: 'Thesis', deadline: '2030-01-10', hours: 6 }, token);
+  assert.equal(created.status, 201);
+
+  const list = await call('GET', '/tasks', null, token);
+  assert.equal(list.body.length, 1);
+  assert.equal(list.body[0].title, 'Thesis');
+});
+
+test('wrong password is refused', async () => {
+  const address = email('omar');
+  await call('POST', '/auth/register', { email: address, password: 'secret123' });
+  const res = await call('POST', '/auth/login', { email: address, password: 'nope-nope' });
+  assert.equal(res.status, 401);
+});
+
+test('users only see their own tasks', async () => {
+  const a = (await call('POST', '/auth/register', { email: email('a'), password: 'secret123' })).body.token;
+  const b = (await call('POST', '/auth/register', { email: email('b'), password: 'secret123' })).body.token;
+  const task = (await call('POST', '/tasks', { title: 'Private', deadline: '2030-01-10', hours: 2 }, a)).body;
+
+  assert.equal((await call('GET', '/tasks', null, b)).body.length, 0);
+  assert.equal((await call('PATCH', `/tasks/${task.id}`, { done: true }, b)).status, 404);
+});
 ```
 
-**3.** Before `return (`, after the `events` block:
+- `app.listen(0)` starts the real app on any free port – that's why we split `app.js` from `index.js`!
+- the last test proves the most important rule of Lesson 6: **Omar can't touch Lena's task**
 
-```jsx
-  const dayEvents = events[selected] || [];
-```
+## S3. ✍️ Run the tests
 
-**4.** Replace the `<MonthCalendar ... />` line with the calendar **plus** a details box:
+Replace **`server/package.json`** with (new: the `test` script):
 
-```jsx
-        <MonthCalendar
-          month={month}
-          onMonthChange={setMonth}
-          events={events}
-          selected={selected}
-          onSelect={setSelected}
-        />
-
-        <div className="card day-details">
-          <h3>{formatLong(selected)}</h3>
-          {!dayEvents.length && <p className="hint">No deadlines this day.</p>}
-          {dayEvents.map((e) => (
-            <div key={e.key} className="day-item">
-              <i className="dot" style={{ background: e.color }} />
-              <span><b>🏁 Deadline:</b> {e.label} {e.done && '✅'}</span>
-            </div>
-          ))}
-        </div>
-```
-
-Replace the **whole** **`client/src/components/MonthCalendar.jsx`** with the final version:
-
-```jsx
-import { monthGrid, todayYMD } from '../utils/dates.js';
-
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const MAX_CHIPS = 3;
-
-/**
- * Month view.
- * events: { 'YYYY-MM-DD': [{ key, label, color, done }] }
- */
-export default function MonthCalendar({ month, onMonthChange, events, selected, onSelect }) {
-  const year = month.getFullYear();
-  const m = month.getMonth();
-  const today = todayYMD();
-  const cells = monthGrid(year, m);
-
-  const shift = (n) => onMonthChange(new Date(year, m + n, 1));
-  const title = month.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-
-  return (
-    <div className="cal">
-      <div className="cal-header">
-        <button onClick={() => shift(-1)}>‹</button>
-        <h3>{title}</h3>
-        <button onClick={() => shift(1)}>›</button>
-        <button className="ghost" onClick={() => { onMonthChange(new Date()); onSelect(today); }}>
-          Today
-        </button>
-      </div>
-
-      <div className="cal-grid">
-        {WEEKDAYS.map((w) => <div key={w} className="cal-weekday">{w}</div>)}
-
-        {cells.map(({ ymd, day, inMonth }) => {
-          const list = events[ymd] || [];
-          const classes = [
-            'cal-cell',
-            !inMonth && 'muted',
-            ymd < today && 'past',
-            ymd === today && 'today',
-            ymd === selected && 'selected',
-          ].filter(Boolean).join(' ');
-
-          return (
-            <div key={ymd} className={classes} onClick={() => onSelect(ymd)}>
-              <div className="cal-day">
-                <span>{day}</span>
-              </div>
-              {list.slice(0, MAX_CHIPS).map((e) => (
-                <div
-                  key={e.key}
-                  className={`chip deadline ${e.done ? 'done' : ''}`}
-                  style={{ background: e.color }}
-                  title={e.label}
-                >
-                  🏁 {e.label}
-                </div>
-              ))}
-              {list.length > MAX_CHIPS && <div className="chip more">+{list.length - MAX_CHIPS} more</div>}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+```json
+{
+  "name": "server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.23.1"
+  }
 }
 ```
 
-What changed in the calendar:
-- new props `selected` and `onSelect`
-- every day box has `onClick={() => onSelect(ymd)}` → tells the page which day was clicked
-- **Today** also selects today
-- the CSS classes are built from a list:
+Replace the **root** **`package.json`** with:
 
-```jsx
-const classes = [
-  'cal-cell',
-  !inMonth && 'muted',          // grey if not in this month
-  ymd < today && 'past',        // faded if in the past
-  ymd === today && 'today',     // dark border
-  ymd === selected && 'selected', // light blue
-].filter(Boolean).join(' ');    // e.g. "cal-cell today selected"
+```json
+{
+  "name": "app-dev-course",
+  "private": true,
+  "type": "module",
+  "workspaces": ["client", "server"],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client",
+    "test": "npm test -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}
 ```
 
-Each line is a class name **or** `false`. `.filter(Boolean)` removes the `false`s, `.join(' ')` glues the rest together.
+- `"type": "module"` – lets `api/index.js` use `import`, like the rest of our code
+- `"test"` – `npm test` in the root folder runs the server tests
 
-👀 **You see:** today has a dark border. Click a day → it turns light blue, and the box below shows its date and deadlines.
+Run:
 
-💡 `selected` lives in the **page**, because **two** things need it: the calendar (highlight) and the details box. *Put state in the closest parent that needs it.*
-
----
-
-## G7. ✍️ Priority, done checkbox and stats
-
-The page is growing. Replace the **whole** **`client/src/pages/CalendarPage.jsx`** with:
-
-```jsx
-import { useEffect, useMemo, useState } from 'react';
-import { api } from '../api.js';
-import MonthCalendar from '../components/MonthCalendar.jsx';
-import { addDays, formatLong, fromYMD, relative, todayYMD } from '../utils/dates.js';
-
-const emptyForm = () => ({ title: '', deadline: addDays(todayYMD(), 7), hours: 3, priority: 'medium' });
-
-export default function CalendarPage() {
-  const [tasks, setTasks] = useState([]);
-  const [form, setForm] = useState(emptyForm);
-  const [month, setMonth] = useState(() => new Date()); // which month the calendar shows
-  const [selected, setSelected] = useState(todayYMD()); // which day is clicked
-
-  // Load tasks once
-  useEffect(() => {
-    api('/tasks').then(setTasks).catch(console.error);
-  }, []);
-
-  // ---- Task actions ----
-  const addTask = async (e) => {
-    e.preventDefault();
-    if (!form.title.trim()) return;
-    const task = await api('/tasks', { method: 'POST', body: form });
-    setTasks((prev) => [...prev, task]);
-    setForm(emptyForm());
-  };
-
-  const updateTask = async (id, changes) => {
-    const updated = await api(`/tasks/${id}`, { method: 'PATCH', body: changes });
-    setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
-  };
-
-  const removeTask = async (id) => {
-    await api(`/tasks/${id}`, { method: 'DELETE' });
-    setTasks((prev) => prev.filter((t) => t.id !== id));
-  };
-
-  const showDay = (ymd) => {
-    setMonth(fromYMD(ymd));
-    setSelected(ymd);
-  };
-
-  // ---- Turn tasks into calendar events: { 'YYYY-MM-DD': [event, ...] } ----
-  const events = useMemo(() => {
-    const ev = {};
-    for (const t of tasks) {
-      (ev[t.deadline] ||= []).push({
-        key: `d-${t.id}`, kind: 'deadline', label: t.title, color: t.color, done: t.done, task: t,
-      });
-    }
-    return ev;
-  }, [tasks]);
-
-  // ---- Stats ----
-  const open = tasks.filter((t) => !t.done);
-  const totalHours = open.reduce((s, t) => s + t.hours, 0);
-  const nextDeadline = [...open].sort((a, b) => a.deadline.localeCompare(b.deadline))[0];
-  const sortedTasks = [...tasks].sort(
-    (a, b) => Number(a.done) - Number(b.done) || a.deadline.localeCompare(b.deadline)
-  );
-  const dayEvents = events[selected] || [];
-
-  return (
-    <div className="cal-page">
-      {/* ---------- Left column ---------- */}
-      <section className="cal-side">
-        <h2>AI Calendar</h2>
-        <p className="hint">Step 3: every deadline appears on the calendar.</p>
-
-        <form className="card form" onSubmit={addTask}>
-          <input
-            placeholder="What do you need to do?"
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-          />
-          <div className="row">
-            <label>
-              Deadline
-              <input type="date" value={form.deadline}
-                onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
-            </label>
-            <label>
-              Hours
-              <input type="number" min="0.5" step="0.5" value={form.hours}
-                onChange={(e) => setForm({ ...form, hours: e.target.value })} />
-            </label>
-            <label>
-              Priority
-              <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
-            </label>
-          </div>
-          <button type="submit">+ Add task</button>
-        </form>
-
-        <div className="stats">
-          <div><b>{open.length}</b><span>open tasks</span></div>
-          <div><b>{totalHours}h</b><span>work left</span></div>
-          <div><b>{tasks.length - open.length}</b><span>done</span></div>
-        </div>
-        {nextDeadline && (
-          <p className="hint">Next deadline: <b>{nextDeadline.title}</b> {relative(nextDeadline.deadline)}</p>
-        )}
-
-        <h3>Tasks</h3>
-        {!tasks.length && <p className="hint">No tasks yet.</p>}
-        <ul className="task-list">
-          {sortedTasks.map((t) => (
-            <li key={t.id} className={t.done ? 'done' : ''}>
-              <input type="checkbox" checked={t.done} onChange={() => updateTask(t.id, { done: !t.done })} />
-              <i className="dot" style={{ background: t.color }} />
-              <div className="task-info" onClick={() => showDay(t.deadline)}>
-                <div className="task-title">{t.title}</div>
-                <div className="task-meta">
-                  {t.hours}h · due {t.deadline} ({relative(t.deadline)})
-                  <span className={`badge ${t.priority}`}>{t.priority}</span>
-                </div>
-              </div>
-              <button className="small" onClick={() => removeTask(t.id)}>✕</button>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* ---------- Right column ---------- */}
-      <section className="cal-main">
-        <MonthCalendar
-          month={month}
-          onMonthChange={setMonth}
-          events={events}
-          selected={selected}
-          onSelect={setSelected}
-        />
-
-        <div className="card day-details">
-          <h3>{formatLong(selected)}</h3>
-          {!dayEvents.length && <p className="hint">No deadlines this day.</p>}
-          {dayEvents.map((e) => (
-            <div key={e.key} className="day-item">
-              <i className="dot" style={{ background: e.color }} />
-              <span><b>🏁 Deadline:</b> {e.label} {e.done && '✅'}</span>
-            </div>
-          ))}
-          <p className="hint">Next step: plan <i>when</i> to work on each task, so it's not all left for the last day.</p>
-        </div>
-      </section>
-    </div>
-  );
-}
+```bash
+npm test
 ```
 
 👀 **You see:**
-- a **Priority** dropdown; each task shows a coloured dot and a priority badge
-- a **checkbox**: tick it → the task is crossed out in the list **and** on the calendar
-- **stats**: open tasks, hours of work left, done
-- click a task → the calendar **jumps** to its deadline (try one in another month!)
 
-### 💡 What's new? (read the file from top to bottom with these notes)
-
-**One state object for the whole form** – instead of 4 separate `useState`s:
-
-```jsx
-const emptyForm = () => ({ title: '', deadline: addDays(todayYMD(), 7), hours: 3, priority: 'medium' });
-const [form, setForm] = useState(emptyForm);
-
-<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+```
+# tests 11
+# pass 11
+# fail 0
 ```
 
-`{ ...form, title: 'new' }` = *"copy all fields, but replace `title`"*. The default deadline is now one week ahead.
+🧪 Break something on purpose: in `server/src/planner.js` change `const SESSION_HOURS = 1.5;` to `3`, run `npm test` → a test fails and tells you which rule broke. Change it back.
 
-**Changing one task with `PATCH`:**
+## S4. ✍️ Let GitHub run the tests: GitHub Actions
 
-```jsx
-const updateTask = async (id, changes) => {
-  const updated = await api(`/tasks/${id}`, { method: 'PATCH', body: changes });
-  setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
-};
+Create the folders **`.github/workflows`** in the root folder and in them the file **`.github/workflows/ci.yml`**:
 
-<input type="checkbox" checked={t.done} onChange={() => updateTask(t.id, { done: !t.done })} />
+```yaml
+# Runs automatically on GitHub every time someone pushes code.
+# Green check = the app builds and all tests pass. Red cross = something broke.
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # A throw-away PostgreSQL database just for the tests
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: course
+          POSTGRES_PASSWORD: course
+          POSTGRES_DB: appdev
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://course:course@localhost:5432/appdev
+      JWT_SECRET: ci-test-secret
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci           # install exactly the versions in package-lock.json
+      - run: npm run build    # does the frontend build?
+      - run: npm test         # planner + API tests
 ```
 
-`prev.map((t) => (t.id === id ? updated : t))` – *"go through all tasks; use the new version for the changed one, keep the others"*. `!t.done` flips `true` ↔ `false`.
+**CI** (Continuous Integration) = on every `git push`, GitHub starts a fresh computer, installs your project, builds it and runs the tests – with its own throw-away database.
 
-**Stats are just calculations on the list:**
+Push your code:
 
-```jsx
-const open = tasks.filter((t) => !t.done);
-const totalHours = open.reduce((s, t) => s + t.hours, 0);
-const nextDeadline = [...open].sort((a, b) => a.deadline.localeCompare(b.deadline))[0];
+```bash
+git add .
+git commit -m "Lesson 7: ready for Vercel, tests and CI"
+git push
 ```
 
-**Click a task → jump there:**
+Open your repository on GitHub → tab **Actions**. After about a minute: a green ✅ next to your commit. Red ❌ = click it and read which step failed.
 
-```jsx
-const showDay = (ymd) => {
-  setMonth(fromYMD(ymd));   // show the right month
-  setSelected(ymd);         // highlight the day
-};
-```
-
-This is why `month` and `selected` live in the page: the **task list** can now control the calendar too.
+> No GitHub repository of your own yet? Do **T1** below first, then come back.
 
 ---
 
-## G8. ✍️ Map: a list of saved places
+# Part T – Go live
 
-Back to the map! Open **`client/src/pages/MapPage.jsx`**.
+You do these steps once, in the browser. Keep this page open next to it.
 
-**1.** After the `flyTo` function, add:
+## T1. Put your code on GitHub
 
-```jsx
-  // NEW in step 3: delete a saved place
-  const removePlace = async (id) => {
-    await api(`/places/${id}`, { method: 'DELETE' });
-    setPlaces((prev) => prev.filter((p) => p.id !== id));
-  };
+Vercel deploys straight from GitHub, so your code must be there.
+
+- **You cloned the course repo?** Make it your own: on GitHub click **New repository** (name: `app-dev-course`, **without** README), then in your project folder:
+
+```bash
+git remote set-url origin https://github.com/YOUR-USERNAME/app-dev-course.git
+git push -u origin --all
 ```
 
-**2.** Replace the line `<p className="hint">📍 {places.length} saved place(s) ...</p>` with:
+- **You built it yourself from Lesson 0?** Create the repository the same way, then:
 
-```jsx
-        {/* NEW: list of saved places – click to fly there */}
-        <h3>Saved places</h3>
-        {!places.length && <p className="hint">Click on the map to save your first place.</p>}
-        <ul className="list">
-          {places.map((p) => (
-            <li key={p.id}>
-              <span className="link" onClick={() => flyTo([p.lng, p.lat])}>{p.name}</span>
-              <button className="small" onClick={() => removePlace(p.id)}>✕</button>
-            </li>
-          ))}
-        </ul>
+```bash
+git remote add origin https://github.com/YOUR-USERNAME/app-dev-course.git
+git push -u origin --all
 ```
 
-👀 **You see:** a list of your places. Click one → the camera flies there. ✕ → the place **and its pin** disappear.
+✅ On GitHub you see your files, including **`vercel.json`** and the **`api/`** folder.
 
-💡 We didn't write any code to remove the pin! Deleting changes `places` → the marker effect from Lesson 2 (`[places]`) runs again → pins are redrawn. **Change the data, the screen follows.**
+> Work on a branch, e.g. `step-7-deploy`? That's fine – remember its name, you need it in T4.
 
-<details>
-<summary>✅ <b>Checkpoint:</b> your <code>MapPage.jsx</code> should now look like this</summary>
+## T2. Create the project on Vercel
 
-```jsx
-import { useEffect, useRef, useState } from 'react';
-import * as maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
-import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
-import { api } from '../api.js';
+1. Go to **https://vercel.com** → **Sign Up** → **Continue with GitHub**.
+2. **Add New… → Project**. In the list, find **app-dev-course** → **Import**.
+   *(Not in the list? Click **Adjust GitHub App Permissions** and allow access to the repository.)*
+3. On the **Configure Project** screen, set exactly:
 
-// Tell MapLibre where its web worker (tile decoder) lives, so Vite can serve/bundle it
-maplibregl.setWorkerUrl(workerUrl);
+| Setting | Value |
+|---|---|
+| **Project Name** | anything, e.g. `app-dev-course-yourname` – this becomes your link |
+| **Framework Preset** | **Other** |
+| **Root Directory** | `./` – leave it! **Not** `client` |
+| Build / Output / Install | don't touch – `vercel.json` sets them |
 
-// Free map tiles, no API key needed: https://openfreemap.org
-const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+4. Open **Environment Variables** and add one variable:
+   - Key **`JWT_SECRET`**, Value: a new random text from
 
-const CITIES = {
-  Berlin: [13.405, 52.52],
-  Cologne: [6.9603, 50.9375],
-  'New York': [-73.9857, 40.7484],
-  Tokyo: [139.7671, 35.6812],
-};
-
-export default function MapPage() {
-  const containerRef = useRef(null); // the <div> the map is drawn into
-  const mapRef = useRef(null);       // the map object, so buttons can control it
-  const markersRef = useRef([]);     // the red pins currently on the map
-  const [places, setPlaces] = useState([]); // NEW in step 2: places saved on the server
-
-  // Create the map once, when the page appears
-  useEffect(() => {
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: STYLE_URL,
-      center: CITIES.Berlin,
-      zoom: 15.5,
-      pitch: 60, // tilt the camera -> 3D look
-      bearing: -20,
-    });
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
-
-    map.on('load', () => {
-      // Make sure buildings are extruded in 3D
-      if (!map.getLayer('building-3d')) {
-        map.addLayer({
-          id: 'building-3d',
-          source: 'openmaptiles',
-          'source-layer': 'building',
-          type: 'fill-extrusion',
-          minzoom: 14,
-          paint: {
-            'fill-extrusion-color': '#d6cfc4',
-            'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 10],
-            'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
-            'fill-extrusion-opacity': 0.85,
-          },
-        });
-      }
-    });
-
-    // NEW: click on the map -> save a place on the server
-    map.on('click', async (e) => {
-      const name = window.prompt('Name this place:');
-      if (!name) return;
-      const place = await api('/places', {
-        method: 'POST',
-        body: { name, lng: e.lngLat.lng, lat: e.lngLat.lat },
-      });
-      setPlaces((prev) => [...prev, place]);
-    });
-
-    mapRef.current = map;
-    return () => map.remove(); // clean up when leaving the page
-  }, []);
-
-  // NEW: load saved places from the server
-  useEffect(() => {
-    api('/places').then(setPlaces).catch(console.error);
-  }, []);
-
-  // NEW: draw a red marker for every place (runs again whenever `places` changes)
-  useEffect(() => {
-    markersRef.current.forEach((m) => m.remove());
-    markersRef.current = places.map((p) =>
-      new maplibregl.Marker({ color: '#e63946' })
-        .setLngLat([p.lng, p.lat])
-        .setPopup(new maplibregl.Popup().setText(p.name))
-        .addTo(mapRef.current)
-    );
-  }, [places]);
-
-  const flyTo = (center) =>
-    mapRef.current.flyTo({ center, zoom: 16, pitch: 60, speed: 1.2 });
-
-  // NEW in step 3: delete a saved place
-  const removePlace = async (id) => {
-    await api(`/places/${id}`, { method: 'DELETE' });
-    setPlaces((prev) => prev.filter((p) => p.id !== id));
-  };
-
-  return (
-    <div className="map-layout">
-      <aside className="panel">
-        <h2>3D Map</h2>
-        <p className="hint">Drag with right mouse / Ctrl to rotate. Click the map to save a place.</p>
-
-        <h3>Cities</h3>
-        <div className="buttons">
-          {Object.entries(CITIES).map(([name, center]) => (
-            <button key={name} onClick={() => flyTo(center)}>{name}</button>
-          ))}
-        </div>
-
-        {/* NEW: list of saved places – click to fly there */}
-        <h3>Saved places</h3>
-        {!places.length && <p className="hint">Click on the map to save your first place.</p>}
-        <ul className="list">
-          {places.map((p) => (
-            <li key={p.id}>
-              <span className="link" onClick={() => flyTo([p.lng, p.lat])}>{p.name}</span>
-              <button className="small" onClick={() => removePlace(p.id)}>✕</button>
-            </li>
-          ))}
-        </ul>
-      </aside>
-      <div ref={containerRef} className="map" />
-    </div>
-  );
-}
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
-</details>
+
+5. Click **Deploy**.
+
+👀 After about a minute you get a link. The first version may show *"Server is not configured: DATABASE_URL missing"* when you try to register – correct, there is no database yet.
+
+## T3. Add the database (inside Vercel)
+
+1. In your project, open the tab **Storage** → **Create Database** → **Neon** (Serverless Postgres) → **Continue**.
+2. Plan **Free**, region **Frankfurt (fra1)** or the closest → **Create**.
+3. **Connect Project**: choose your project, tick **Production** and **Preview** → **Connect**.
+
+Vercel now adds **`DATABASE_URL`** (and some other `PG…` variables) to your project automatically. Check it: **Settings → Environment Variables** – you see `DATABASE_URL` and `JWT_SECRET`.
+
+> Want the same data as on your laptop? Copy the connection string from Neon (**Connect**) into your `server/.env` as `DATABASE_URL`.
+
+## T4. Tell Vercel which branch is "live"
+
+Vercel calls the live version **Production**. By default it uses the branch **`main`**.
+
+- Your finished code is on **`main`** → nothing to do.
+- Your finished code is on another branch (e.g. `step-7-deploy`) → **Settings → Environments → Production → Branch Tracking** → enter the branch name → **Save**.
+
+> ⚠️ Branches from older lessons have no `vercel.json` and **will show red ❌ builds** on Vercel. That's expected and harmless – only the production branch matters.
+
+## T5. Deploy again with the database
+
+Environment variables are only read when a version is **built**, so build once more:
+
+**Deployments** → the newest deployment **of your production branch** (check the branch name next to it!) → **⋯** → **Redeploy** → **Redeploy**.
+
+## T6. 👀 Check your live app
+
+Your link is shown on the project page, e.g. `https://app-dev-course-yourname.vercel.app`.
+
+1. **`<your link>/api/health`** → `{"ok":true}` → the Express function runs on Vercel.
+2. **`<your link>`** → login page → **Create one** → register → you're in. 🎉
+3. Add a task, save a place on the map, refresh → still there (Neon!).
+4. Send the link to a classmate: they register and see **their own, empty** calendar.
+
+**Look behind the scenes:** project → **Logs**. You see every API request, and `✅ Database ready` after the first one.
+
+## T7. Troubleshooting
+
+| You see | Why | Fix |
+|---|---|---|
+| `Server is not configured: DATABASE_URL missing` | no database, or not redeployed after adding it | T3, then T5 |
+| `Server is not configured: JWT_SECRET missing` | variable forgotten | **Settings → Environment Variables** → add it → T5 |
+| Build error *"No Output Directory named dist"* or *"…named public"* | wrong **Root Directory**, or you built an old branch without `vercel.json` | Root Directory `./` (**Settings → Build and Deployment**); redeploy the right branch |
+| Classmates see a **Vercel login page** | Deployment Protection is on | **Settings → Deployment Protection → Vercel Authentication** → off for Production, or share the production link (not a preview link) |
+| Page loads, but every action fails | error in the function | project → **Logs** → read the red line |
+| A warning *"SECURITY WARNING: The SSL modes…"* in the logs | only a notice from the `pg` library | nothing to do |
+
+## T8. From now on: push = deploy
+
+Vercel is connected to GitHub:
+
+- `git push` to your **production branch** → the live version is updated in ~1 minute
+- push to any other branch → a separate **preview** link to test first
+
+Try it: change the heading in `CalendarPage.jsx`, commit, push – GitHub Actions tests it ✅, Vercel deploys it 🚀.
 
 ---
 
-## 🤔 Think about it
+# 🎉 Your app is live!
 
-The calendar now shows **when things are due**. But for someone who always starts the night before, that's not enough. They need to know **when to work** on each task. → Lesson 4.
+You went through the whole life cycle: plan → requirements → design → **build** → **test** → **deploy**. Compare it with the six phases on the [Miro board](https://miro.com/app/board/uXjVHeLSHBw=/?share_link_id=439689196857).
 
 ## 💪 Bonus exercises
 
-**A.** Highlight weekends with a light background.
+**A.** Add a test: *"a task with a deadline in the past is at risk"*. Run `npm test`.
 
-<details><summary>💡 Solution</summary>
+**B.** Add a status badge to your README: in GitHub → **Actions → CI → ⋯ → Create status badge**.
 
-In `MonthCalendar.jsx`, the position `i` of each box tells the weekday (0 = Mon … 6 = Sun):
+**C.** Give your app a nicer address: Vercel → **Settings → Domains** → edit the `.vercel.app` name.
 
-```jsx
-{cells.map(({ ymd, day, inMonth }, i) => {
-  // ...
-  const classes = [
-    'cal-cell',
-    i % 7 >= 5 && 'weekend',
-    // ...
-```
-
-In `client/src/index.css`:
-
-```css
-.cal-cell.weekend { background: #fbf7ef; }
-```
-</details>
-
-**B.** Ask *"Delete this task?"* before deleting.
-
-<details><summary>💡 Solution</summary>
-
-```jsx
-const removeTask = async (id) => {
-  if (!window.confirm('Delete this task?')) return;
-  // ...the rest stays the same
-};
-```
-</details>
+**D.** Make a small change on a new branch, push it, and open the **preview link** Vercel creates. Merge it into `main` when you like it.
 
 ## 📖 Words you learned
 
 | Word | Meaning |
 |---|---|
-| **Props** | data a parent gives to a child component |
-| **Callback prop** | a function given as a prop, so the child can report something (`onSelect`) |
-| **Lifting state up** | keep state in the parent that needs it, pass it down |
-| **Derived data** | calculated from state instead of stored (`events` from `tasks`) |
-| **`useMemo`** | remember a calculation until its inputs change |
-| **`PATCH`** | change some fields of an existing item |
-| **`.find()` / `.reduce()` / `.sort()`** | find one item / combine all into one value / order a list |
+| **Deploy** | put your app on a server so others can use it |
+| **Host / Vercel** | the company whose computers run your app |
+| **Serverless function** | code that starts only when a request comes in |
+| **Build** | turn the source code into optimized files for the browser |
+| **Environment variable** | a setting (like a secret) stored on the host, not in the code |
+| **Rewrite** | a rule that sends a URL to a different file or function |
+| **Unit test / API test** | a program that checks one function / the real server |
+| **CI (GitHub Actions)** | tests run automatically on every push |
+| **Production / Preview** | the real live version / a test version for one branch |
 
-## ➡️ Next
+---
 
-**[Lesson 4 – Planner + AI](https://github.com/amirreza98/App-dev-course/tree/step-4-planner#readme)**: the app plans *when* to work on each task.
+➡️ **Next:** [Lesson 8 – The mobile app](https://github.com/amirreza98/App-dev-course/tree/step-8-mobile#readme): your project on your phone with React Native and Expo.

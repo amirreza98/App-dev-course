@@ -1,19 +1,20 @@
-import express from 'express';
-import cors from 'cors';
-import placesRouter from './routes/places.js';
-import tasksRouter from './routes/tasks.js';
+// Local development: check the settings, prepare the database, start listening.
+import app from './app.js';
+import { initDb, missingSettings } from './db.js';
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+const missing = missingSettings();
+if (missing.length) {
+  console.error(`❌ Missing in server/.env: ${missing.join(', ')} (see server/.env.example)`);
+  process.exit(1);
+}
 
-app.get('/api/health', (req, res) => res.json({ ok: true }));
-
-// Project 1: 3D Map
-app.use('/api/places', placesRouter);
-
-// Project 2: AI Calendar
-app.use('/api/tasks', tasksRouter);
+try {
+  await initDb();
+} catch (err) {
+  console.error('❌ Could not connect to the database. Check DATABASE_URL in server/.env');
+  console.error(err.message);
+  process.exit(1);
+}
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`API running on http://localhost:${PORT}`));

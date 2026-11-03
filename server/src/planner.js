@@ -73,6 +73,44 @@ export function ruleBasedPlan(tasks, { maxHoursPerDay = 4, today: todayStr } = {
   return { source: 'rule-based', days, atRisk };
 }
 
+/**
+ * Optional: ask an LLM to build the plan. Falls back to rules on any problem.
+ * Class exercise: improve the prompt, or add user preferences (e.g. "no work on Sundays").
+ */
+async function llmPlan(tasks, { maxHoursPerDay, today: todayStr }) {
+  const today = todayStr || toDateStr(new Date());
+  const prompt = `Today is ${today}. Plan these tasks for a person who procrastinates.
+Rules: start today, sessions of max ${SESSION_HOURS}h, max ${maxHoursPerDay}h per day,
+finish each task at least one day before its deadline, prefer high-priority tasks.
+Tasks: ${JSON.stringify(tasks.map(({ id, title, deadline, hours, priority }) => ({ id, title, deadline, hours, priority })))}
+Reply ONLY with JSON: {"days": {"YYYY-MM-DD": [{"taskId": number, "title": string, "hours": number}]}, "atRisk": [{"taskId": number, "title": string, "missingHours": number}]}`;
+
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+  if (!res.ok) throw new Error(`LLM error ${res.status}`);
+  const data = await res.json();
+  const parsed = JSON.parse(data.choices[0].message.content);
+  return { source: 'ai', days: parsed.days || {}, atRisk: parsed.atRisk || [] };
+}
+
+// useAi: only call the LLM when the user explicitly asks (it's slower and costs money)
 export async function planTasks(tasks, options) {
+  if (options.useAi && process.env.OPENAI_API_KEY) {
+    try {
+      return await llmPlan(tasks, options);
+    } catch (err) {
+      console.warn('LLM planning failed, using rule-based planner:', err.message);
+    }
+  }
   return ruleBasedPlan(tasks, options);
 }
