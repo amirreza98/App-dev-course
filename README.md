@@ -14,6 +14,7 @@ We build two apps **step by step, with our own hands**: a 🗺️ **3D Map** and
 | [4 · Planner + AI](https://github.com/amirreza98/App-dev-course/tree/step-4-planner#readme) **📍 you are here** | `step-4-planner` | ~50 min |
 | [5 · Database](https://github.com/amirreza98/App-dev-course/tree/step-5-database#readme) | `step-5-database` | ~60 min |
 | [6 · Login](https://github.com/amirreza98/App-dev-course/tree/step-6-auth#readme) | `step-6-auth` | ~70 min |
+| [7 · Go live](https://github.com/amirreza98/App-dev-course/tree/step-7-deploy#readme) | `step-7-deploy` | ~60 min |
 
 **How it works:** this page is the tutorial for this step. Follow it from top to bottom: create, replace or delete exactly the files it tells you → **save** → look at the browser. **Lesson 0 starts from an empty folder**, and every lesson continues in your own code – reading the lessons in order is all you need. The branch holds the **finished code** of the step, so you can compare or catch up.
 
