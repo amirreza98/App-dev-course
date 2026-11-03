@@ -15,7 +15,9 @@ We build two apps **step by step, with our own hands**: a 🗺️ **3D Map** and
 | [5 · Database](https://github.com/amirreza98/App-dev-course/tree/step-5-database#readme) | `step-5-database` | ~60 min |
 | [6 · Login](https://github.com/amirreza98/App-dev-course/tree/step-6-auth#readme) | `step-6-auth` | ~70 min |
 | [7 · Go live](https://github.com/amirreza98/App-dev-course/tree/step-7-deploy#readme) | `step-7-deploy` | ~75 min |
-| [8 · Mobile app](https://github.com/amirreza98/App-dev-course/tree/step-8-mobile#readme) **📍 you are here** | `step-8-mobile` | ~3 h |
+| [8 · Mobile app](https://github.com/amirreza98/App-dev-course/tree/step-8-mobile#readme) | `step-8-mobile` | ~3 h |
+| [9 · Reminders](https://github.com/amirreza98/App-dev-course/tree/step-9-reminders#readme) | `step-9-reminders` | ~60 min |
+| [10 · Campus 3D + VR](https://github.com/amirreza98/App-dev-course/tree/step-10-campus-3d#readme) **📍 you are here** | `step-10-campus-3d` | ~90 min |
 
 **How it works:** this page is the tutorial for this step. Follow it from top to bottom: create, replace or delete exactly the files it tells you → **save** → look at the browser. **Lesson 0 starts from an empty folder**, and every lesson continues in your own code – reading the lessons in order is all you need. The branch holds the **finished code** of the step, so you can compare or catch up.
 
@@ -37,1118 +39,700 @@ Open **http://localhost:5173**. Stop the app with **Control + C**. From step 5 o
 
 ---
 
-# Lesson 8 – The mobile app: your project on your phone
+# Lesson 10 – Campus 3D: walk through your campus (+ VR)
 
 | | |
 |---|---|
-| ⏱️ Time | ~2 × 90 min |
-| 🏁 Start from | your code from Lesson 7 – **your app must be live** (Lesson 7, Part T) |
-| ✅ Finished result | branch `step-8-mobile` (folder `mobile/`) |
-| 🎯 You will | build a real iPhone / Android app with **React Native**, using the **same server and database** as your website |
+| ⏱️ Time | ~90 min |
+| 🏁 Start from | your code from Lesson 9 (or `git checkout -f step-9-reminders`) |
+| ✅ Finished result | branch `step-10-campus-3d` |
+| 🎯 You will | build a **3D campus** in the browser: buildings you can open floor by floor, a room search, a street view – and **VR** on a headset |
 
-> 🆘 **Stuck or behind?** Run `git checkout -f step-8-mobile`, then `cd mobile && npm install`, set your link in `mobile/src/config.js` (V1) and start with `npx expo start` (U4).
+> 🆘 **Stuck or behind?** Run `git checkout -f step-10-campus-3d && npm install && npm run dev`.
 
 ---
 
-## 💡 React → React Native: what changes, what stays
+## 💡 From a map to a world
 
-You **don't convert** the website. You build a second frontend that talks to the **same API**:
+Our 3D map (Lesson 1) shows buildings from the outside. New students get lost **inside** the campus: *"Where is Room A2.14? Which floor is the library's quiet zone?"* So we build our own small 3D world:
 
-```
-            ┌── Website (React, client/) ──┐
-Neon ◀── Express API on Vercel ◀──────────┤
-            └── Phone app (React Native, mobile/) ──┘
-```
+- every building is a stack of **floors** (boxes)
+- click a building → it **opens**: the floors move apart, the rooms appear as markers
+- search *"library"* → the right building opens and the room lights up
+- **🚶 Street view** – stand on the path at eye height and look around
+- **🥽 VR** – put on a headset and stand in the campus at real size
 
-| Stays the same ✅ | Changes 🔄 |
+We use **three.js** – the most popular 3D library for the web – through **React Three Fiber**, which lets us write 3D scenes as React components:
+
+| three.js idea | React Three Fiber |
 |---|---|
-| React: components, `useState`, `useEffect`, props | `<div>` → `<View>`, `<p>`/`<span>` → `<Text>` |
-| The whole server, database, login, planner | `<input>` → `<TextInput>`, `<button>` → `<Pressable>` |
-| `fetch` and our `api()` helper idea | CSS file → `StyleSheet.create({...})` in JavaScript |
-| Date helpers (`dates.js`) | `localStorage` → `SecureStore` (encrypted phone storage) |
-| | MapLibre → `react-native-maps` (Apple Maps / Google Maps, with 3D buildings) |
+| a 3D object | `<mesh>` |
+| its shape | `<boxGeometry args={[width, height, depth]} />` |
+| its surface (colour, transparency) | `<meshStandardMaterial color="blue" />` |
+| a group you can move together | `<group position={[x, y, z]}>` |
+| light | `<ambientLight />`, `<directionalLight />` |
 
-We use **Expo**: a toolkit that runs your app on your phone **without Xcode or Android Studio**. You install the free **Expo Go** app, scan a QR code – done.
-
----
-
-# Part U – Your first app on your phone
-
-## U1. Install Expo Go on your phone
-
-- iPhone: **App Store** → search **Expo Go** → install
-- Android: **Play Store** → search **Expo Go** → install
-
-## U2. Create the app
-
-In the **root** folder of the project (next to `client/` and `server/`):
-
-```bash
-npx create-expo-app@latest mobile --template blank
-```
-
-A new folder **`mobile/`** appears – a complete, separate React Native project with its own `package.json`.
-
-> 💡 `mobile` is **not** added to the root `workspaces`: the phone app uses its own versions of React. Always run its commands **inside** `mobile/`.
-
-## U3. Clean up and install the libraries
-
-Delete what we don't need (if they exist): **`mobile/AGENTS.md`**, **`mobile/LICENSE`** and the folder **`mobile/.claude`**.
-
-```bash
-rm -rf mobile/AGENTS.md mobile/LICENSE mobile/.claude
-```
-
-Now install three libraries – **always with `npx expo install`** (it picks versions that fit your Expo version):
-
-```bash
-cd mobile
-npx expo install react-native-maps expo-secure-store react-native-safe-area-context
-```
-
-- **react-native-maps** – the map (Apple Maps on iPhone, Google Maps on Android), works in Expo Go
-- **expo-secure-store** – stores the login token encrypted on the phone
-- **react-native-safe-area-context** – keeps our app away from the notch and the home bar
-
-Replace **`mobile/app.json`** with (new: the app name):
-
-```json
-{
-  "expo": {
-    "name": "App Dev Course",
-    "slug": "app-dev-course",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "ios": {
-      "supportsTablet": true
-    },
-    "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
-    "plugins": [
-      "expo-secure-store"
-    ]
-  }
-}
-```
-
-## U4. 📱 Start it
-
-Still in the `mobile` folder:
-
-```bash
-npx expo start
-```
-
-A **QR code** appears in the terminal.
-
-- **iPhone:** open the **Camera** app → point it at the QR code → tap the banner
-- **Android:** open **Expo Go** → **Scan QR code**
-
-👀 **You see:** *"Open up App.js to start working on your app!"* on your phone. Open **`mobile/App.js`**, change the text, save → the phone updates instantly – just like Vite!
-
-> 📶 Phone and laptop must be on the **same Wi-Fi**. University Wi-Fi often blocks this – then stop with **Control + C** and run `npx expo start --tunnel` (say **yes** if it asks to install something).
+**Coordinates:** `x` = left/right, `y` = **up**, `z` = towards you. 1 unit = 1 metre.
 
 ---
 
-# Part V – Log in with your real account
+# Part AA – The 3D campus
 
-## V1. ✍️ Where is your server?
+## AA1. Install the 3D libraries
 
-Create the folder **`mobile/src`** and in it **`mobile/src/config.js`**:
+Stop the app (**Control + C**). In the **root** folder:
 
-```js
-// The address of YOUR live server from Lesson 7 – no "/" at the end.
-// The phone talks to the same API, the same login and the same database as the website.
-export const API_URL = 'https://app-dev-course-live.vercel.app';
+```bash
+npm install three @react-three/fiber @react-three/drei @react-three/xr -w client
 ```
 
-**Change the link to YOUR live link from Lesson 7.** On the website, the API was on the same address (`/api/...`). A phone app runs on the phone, so it needs the **full** address.
+- **three** – the 3D engine (draws with WebGL on your graphics card)
+- **@react-three/fiber** – three.js as React components
+- **@react-three/drei** – ready-made helpers, e.g. `OrbitControls` (drag to turn, scroll to zoom)
+- **@react-three/xr** – VR and AR (WebXR)
 
-## V2. ✍️ The API helper for the phone
-
-Create **`mobile/src/api.js`**:
+Replace **`client/vite.config.js`** with (new: `'three'` in `dedupe`, so only one copy of three.js is loaded):
 
 ```js
-// Same idea as client/src/api.js – but for the phone:
-// - full address (the app does not run on the same server as the API)
-// - the token lives in SecureStore (encrypted phone storage) instead of localStorage
-import * as SecureStore from 'expo-secure-store';
-import { API_URL } from './config';
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
-const TOKEN_KEY = 'token';
-
-export const getToken = () => SecureStore.getItemAsync(TOKEN_KEY);
-
-export const setToken = (token) =>
-  token ? SecureStore.setItemAsync(TOKEN_KEY, token) : SecureStore.deleteItemAsync(TOKEN_KEY);
-
-// App.js tells us what to do when the token is no longer valid
-let onLogout = () => {};
-export const setOnLogout = (fn) => { onLogout = fn; };
-
-export async function api(path, { method = 'GET', body } = {}) {
-  const headers = {};
-  if (body) headers['Content-Type'] = 'application/json';
-
-  const token = await getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  let res;
-  try {
-    res = await fetch(`${API_URL}/api${path}`, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  } catch {
-    throw new Error('No connection to the server. Check your internet and API_URL in src/config.js');
-  }
-
-  // Token expired -> forget it and go back to the login screen
-  if (res.status === 401 && token) {
-    await setToken(null);
-    onLogout();
-  }
-
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `${method} ${path} failed: ${res.status}`);
-  }
-  return res.status === 204 ? null : res.json();
-}
+export default defineConfig({
+  plugins: [react()],
+  // Always use one copy of React (prevents "Invalid hook call") and of three.js
+  resolve: { dedupe: ['react', 'react-dom', 'three'] },
+  // MapLibre loads its web worker relative to its own file; pre-bundling breaks that
+  optimizeDeps: { exclude: ['maplibre-gl'] },
+  server: {
+    port: 5173,
+    // Forward /api/* calls to the Express server
+    proxy: { '/api': 'http://localhost:3001' },
+  },
+});
 ```
 
-Compare it with `client/src/api.js` – almost the same! Differences:
+## AA2. ✍️ The campus as data
 
-- `${API_URL}/api${path}` – full address
-- `SecureStore` instead of `localStorage`. Its functions are **async** (they return a Promise), so we use `await`.
-- there is no `window` on a phone, so instead of a `logout` event, `App.js` gives us a function with `setOnLogout`
-- a clear message if the phone has no connection
-
-## V3. ✍️ Shared styles
-
-On the phone there is no CSS file. Styles are JavaScript objects. Create **`mobile/src/theme.js`**:
+Create the folder **`client/src/data`** and in it **`client/src/data/campus.js`**:
 
 ```js
-// One place for colours and shared styles, so all screens look the same
-import { StyleSheet } from 'react-native';
+// A DEMO campus – replace it with your own! (Bonus exercise: measure your real campus.)
+// Units are metres. position = centre of the building on the ground [x, z].
+// size = [width, depth]. floors = number of floors. Each room sits on one floor at [x, z] INSIDE the building.
 
-export const colors = {
-  navy: '#1d3557',
-  bg: '#f6f6f8',
-  card: '#ffffff',
-  text: '#1d1d1f',
-  muted: '#666666',
-  border: '#dddddd',
-  danger: '#c1121f',
-  dangerBg: '#fde2e4',
-  warnBg: '#fff3cd',
+export const FLOOR_HEIGHT = 3.2; // metres per floor
+
+export const CAMPUS = {
+  name: 'Demo Campus',
+  buildings: [
+    {
+      id: 'A',
+      name: 'Building A – Main',
+      color: '#4361ee',
+      position: [0, 0],
+      size: [24, 14],
+      floors: 4,
+      rooms: [
+        { name: 'Reception', floor: 0, at: [-8, 3] },
+        { name: 'Student Office', floor: 0, at: [6, -3] },
+        { name: 'Lecture Hall A1', floor: 1, at: [-5, 0] },
+        { name: 'Room A2.10', floor: 2, at: [7, 2] },
+        { name: 'Room A2.14 (App Dev)', floor: 2, at: [-7, -3] },
+        { name: 'Dean’s Office', floor: 3, at: [0, 0] },
+      ],
+    },
+    {
+      id: 'L',
+      name: 'Library',
+      color: '#2a9d8f',
+      position: [30, -6],
+      size: [14, 14],
+      floors: 3,
+      rooms: [
+        { name: 'Book Loan', floor: 0, at: [0, 4] },
+        { name: 'Quiet Study Zone', floor: 1, at: [-3, -2] },
+        { name: 'Group Rooms', floor: 2, at: [3, 2] },
+      ],
+    },
+    {
+      id: 'C',
+      name: 'Labs & Makerspace',
+      color: '#e76f51',
+      position: [-28, -6],
+      size: [16, 10],
+      floors: 2,
+      rooms: [
+        { name: 'Computer Lab C1', floor: 0, at: [-4, 0] },
+        { name: '3D Printing', floor: 0, at: [4, 2] },
+        { name: 'VR Lab', floor: 1, at: [0, -2] },
+      ],
+    },
+    {
+      id: 'M',
+      name: 'Cafeteria',
+      color: '#f4a261',
+      position: [6, 24],
+      size: [18, 10],
+      floors: 1,
+      rooms: [{ name: 'Mensa', floor: 0, at: [0, 0] }],
+    },
+  ],
 };
 
-export const ui = StyleSheet.create({
-  card: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 12 },
-  title: { fontSize: 22, fontWeight: '700', color: colors.text },
-  label: { fontSize: 12, color: colors.muted, marginBottom: 4 },
-  hint: { fontSize: 13, color: colors.muted },
-  input: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: 8,
-    paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, backgroundColor: '#fff',
-  },
-  button: { backgroundColor: colors.navy, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  chip: { borderWidth: 1, borderColor: colors.navy, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
-  chipActive: { backgroundColor: colors.navy },
-  chipText: { color: colors.navy, fontWeight: '500' },
-  chipTextActive: { color: '#fff' },
-  error: { backgroundColor: colors.dangerBg, color: colors.danger, padding: 10, borderRadius: 8, overflow: 'hidden' },
-});
+// Every room with its building – handy for the search box
+export const ALL_ROOMS = CAMPUS.buildings.flatMap((b) =>
+  b.rooms.map((room) => ({ ...room, building: b }))
+);
 ```
 
-- `StyleSheet.create({ ... })` – like CSS classes, but in JavaScript
-- names are **camelCase**: `background-color` → `backgroundColor`, `border-radius` → `borderRadius`
-- numbers have **no unit**: `padding: 14` (not `'14px'`)
+The whole campus is **just data**: buildings with a position, a size, a number of floors and rooms. The 3D code draws whatever is in this file. To show **your** campus, you only change this file (bonus exercise A).
 
-## V4. ✍️ The login screen
+`ALL_ROOMS` puts every room in one list, together with its building – that makes the search easy.
 
-Create the folder **`mobile/src/screens`** and in it **`mobile/src/screens/LoginScreen.js`**:
+## AA3. ✍️ The 3D scene
 
-```js
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View, StyleSheet } from 'react-native';
-import { api } from '../api';
-import { colors, ui } from '../theme';
+Create **`client/src/components/CampusScene.jsx`**:
 
-export default function LoginScreen({ onLogin }) {
-  const [mode, setMode] = useState('login'); // 'login' or 'register'
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+```jsx
+// Everything inside the 3D world: ground, buildings, floors, rooms and labels.
+// React Three Fiber lets us write three.js scenes as React components:
+//   <mesh> = an object, <boxGeometry> = its shape, <meshStandardMaterial> = its surface.
+import { useMemo } from 'react';
+import * as THREE from 'three';
+import { CAMPUS, FLOOR_HEIGHT } from '../data/campus.js';
 
-  const isLogin = mode === 'login';
+const GAP = 2.5; // extra space between floors when a building is "opened"
 
-  const submit = async () => {
-    setError('');
-    setLoading(true);
-    try {
-      // Same API as the website: POST /api/auth/login or /api/auth/register
-      const data = await api(`/auth/${mode}`, { method: 'POST', body: { email, password } });
-      await onLogin(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+// A text label that always faces the camera. We draw the text on a small canvas
+// and use it as a picture (texture) – this works everywhere, also in VR.
+function Label({ text, position, size = 1, color = '#1d1d1f' }) {
+  const texture = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.font = 'bold 48px system-ui, sans-serif';
+    canvas.width = ctx.measureText(text).width + 40;
+    canvas.height = 72;
+    ctx.font = 'bold 48px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.beginPath();
+    ctx.roundRect(0, 0, canvas.width, canvas.height, 20);
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 20, canvas.height / 2);
+    const t = new THREE.CanvasTexture(canvas);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }, [text, color]);
+
+  const aspect = texture.image.width / texture.image.height;
+  return (
+    <sprite position={position} scale={[size * aspect, size, 1]}>
+      <spriteMaterial map={texture} depthTest={false} toneMapped={false} />
+    </sprite>
+  );
+}
+
+// Height (y) of the floor's bottom – opened buildings spread their floors apart
+const floorY = (floor, open) => floor * (FLOOR_HEIGHT + (open ? GAP : 0));
+
+function Building({ building, open, selectedRoom, onSelect }) {
+  const [x, z] = building.position;
+  const [w, d] = building.size;
+  const floors = Array.from({ length: building.floors }, (_, i) => i);
+  const roofY = floorY(building.floors, open);
+
+  return (
+    <group position={[x, 0, z]}>
+      {floors.map((floor) => (
+        <mesh
+          key={floor}
+          position={[0, floorY(floor, open) + FLOOR_HEIGHT / 2, 0]}
+          onClick={(e) => { e.stopPropagation(); onSelect(building.id); }}
+        >
+          <boxGeometry args={[w, FLOOR_HEIGHT * 0.94, d]} />
+          <meshStandardMaterial color={building.color} transparent opacity={open ? 0.35 : 0.95} />
+        </mesh>
+      ))}
+
+      {/* Rooms are only shown when the building is open */}
+      {open &&
+        building.rooms.map((room) => {
+          const active = selectedRoom === room.name;
+          const y = floorY(room.floor, true) + 1;
+          return (
+            <group key={room.name} position={[room.at[0], y, room.at[1]]}>
+              <mesh>
+                <sphereGeometry args={[active ? 0.9 : 0.5, 24, 24]} />
+                <meshStandardMaterial color={active ? '#ffd60a' : '#ffffff'} emissive={active ? '#ffb703' : '#000000'} />
+              </mesh>
+              <Label text={room.name} position={[0, 1.6, 0]} size={active ? 2 : 1.4} />
+            </group>
+          );
+        })}
+
+      <Label text={building.name} position={[0, roofY + 2.5, 0]} size={2.6} color={building.color} />
+    </group>
+  );
+}
+
+export default function CampusScene({ openId, selectedRoom, onSelect }) {
+  return (
+    <>
+      <ambientLight intensity={0.7} />
+      <directionalLight position={[40, 60, 20]} intensity={1.2} />
+
+      {/* Grass and a main path */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} onClick={() => onSelect(null)}>
+        <planeGeometry args={[160, 120]} />
+        <meshStandardMaterial color="#a7c957" />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 12]}>
+        <planeGeometry args={[90, 4]} />
+        <meshStandardMaterial color="#e9edc9" />
+      </mesh>
+
+      {CAMPUS.buildings.map((b) => (
+        <Building key={b.id} building={b} open={openId === b.id} selectedRoom={selectedRoom} onSelect={onSelect} />
+      ))}
+    </>
+  );
+}
+```
+
+- **`Building`** draws one box per floor. `floorY` calculates how high a floor sits – when the building is **open**, there is extra space (`GAP`) between the floors, and the boxes become see-through (`opacity: 0.35`)
+- the **rooms** of an open building are spheres; the selected one is bigger and yellow
+- **`Label`** – 3D text is tricky, so we draw the text on a small invisible `<canvas>` and stick it on a **sprite** (a flat picture that always faces you). This also works in VR.
+- `onClick` on a floor → `onSelect(building.id)`; a click on the grass closes it again. `e.stopPropagation()` stops the click from also reaching the grass behind the building.
+
+## AA4. ✍️ The campus page
+
+Create **`client/src/pages/CampusPage.jsx`**:
+
+```jsx
+import { useEffect, useRef, useState } from 'react';
+import { Canvas } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
+import { XR, XROrigin, createXRStore } from '@react-three/xr';
+import CampusScene from '../components/CampusScene.jsx';
+import { ALL_ROOMS, CAMPUS } from '../data/campus.js';
+
+// The XR store controls the VR session (enter / exit VR)
+const xrStore = createXRStore();
+
+// Two camera views: from above, and standing on the path at eye height (1.7 m)
+const VIEWS = {
+  above: { position: [55, 45, 55], target: [0, 0, 0] },
+  street: { position: [-48, 1.7, 12], target: [0, 5, 4] },
+};
+
+export default function CampusPage() {
+  const [openId, setOpenId] = useState(null);         // which building is opened (floors apart)
+  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [search, setSearch] = useState('');
+  const [vrSupported, setVrSupported] = useState(false);
+  const controlsRef = useRef(null); // the OrbitControls, so buttons can move the camera
+
+  // Can this device show VR? (Meta Quest browser, Android Chrome with a viewer, …)
+  useEffect(() => {
+    navigator.xr?.isSessionSupported('immersive-vr').then(setVrSupported).catch(() => {});
+  }, []);
+
+  const setView = (name) => {
+    const controls = controlsRef.current;
+    controls.object.position.set(...VIEWS[name].position);
+    controls.target.set(...VIEWS[name].target);
+    controls.update();
   };
 
+  const enterVR = () => {
+    if (vrSupported) xrStore.enterVR();
+    else alert('This device cannot show VR. Open the page in a VR headset browser (e.g. Meta Quest) or try the street view.');
+  };
+
+  const openBuilding = (id) => {
+    setOpenId(id);
+    setSelectedRoom(null);
+  };
+
+  const showRoom = (room) => {
+    setOpenId(room.building.id);
+    setSelectedRoom(room.name);
+  };
+
+  const q = search.trim().toLowerCase();
+  const results = q ? ALL_ROOMS.filter((r) => r.name.toLowerCase().includes(q) || r.building.name.toLowerCase().includes(q)) : [];
+  const open = CAMPUS.buildings.find((b) => b.id === openId);
+
   return (
-    <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={[ui.card, styles.card]}>
-        <Text style={ui.title}>{isLogin ? '👋 Welcome back' : '✨ Create your account'}</Text>
-        <Text style={ui.hint}>3D Map + AI Calendar</Text>
+    <div className="campus-layout">
+      <aside className="panel">
+        <h2>🏫 {CAMPUS.name}</h2>
+        <p className="hint">Drag to turn, scroll to zoom. Click a building to open it.</p>
 
-        <View>
-          <Text style={ui.label}>Email</Text>
-          <TextInput
-            style={ui.input}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            placeholder="you@example.com"
-          />
-        </View>
-        <View>
-          <Text style={ui.label}>Password</Text>
-          <TextInput
-            style={ui.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            placeholder="at least 6 characters"
-          />
-        </View>
+        <input
+          className="campus-search"
+          placeholder="Find a room, e.g. library or A2"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {q && (
+          <ul className="list">
+            {results.map((r) => (
+              <li key={r.name} className="link" onClick={() => showRoom(r)}>
+                <span>{r.name}</span>
+                <span className="hint">{r.building.id} · floor {r.floor}</span>
+              </li>
+            ))}
+            {results.length === 0 && <li className="hint">No room found</li>}
+          </ul>
+        )}
 
-        {error ? <Text style={ui.error}>{error}</Text> : null}
+        <h3>Buildings</h3>
+        <div className="buttons">
+          {CAMPUS.buildings.map((b) => (
+            <button key={b.id} className={openId === b.id ? '' : 'ghost'} onClick={() => openBuilding(openId === b.id ? null : b.id)}>
+              {b.name}
+            </button>
+          ))}
+        </div>
 
-        <Pressable style={[ui.button, loading && { opacity: 0.6 }]} onPress={submit} disabled={loading}>
-          <Text style={ui.buttonText}>{loading ? 'Please wait…' : isLogin ? 'Log in' : 'Create account'}</Text>
-        </Pressable>
+        {open && (
+          <div className="card campus-floors">
+            <h3>{open.name}</h3>
+            {Array.from({ length: open.floors }, (_, f) => open.floors - 1 - f).map((floor) => (
+              <div key={floor}>
+                <b>Floor {floor}</b>
+                {open.rooms.filter((r) => r.floor === floor).map((r) => (
+                  <div key={r.name} className={`link campus-room ${selectedRoom === r.name ? 'active' : ''}`}
+                       onClick={() => showRoom({ ...r, building: open })}>
+                    📍 {r.name}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
 
-        <Pressable onPress={() => { setMode(isLogin ? 'register' : 'login'); setError(''); }}>
-          <Text style={ui.hint}>
-            {isLogin ? 'No account yet? ' : 'Already have an account? '}
-            <Text style={styles.link}>{isLogin ? 'Create one' : 'Log in'}</Text>
-          </Text>
-        </Pressable>
-      </View>
-    </KeyboardAvoidingView>
+        <div className="campus-views">
+          <button className="ghost" onClick={() => setView('above')}>🛰️ From above</button>
+          <button className="ghost" onClick={() => setView('street')}>🚶 Street view</button>
+          <button onClick={enterVR}>🥽 Enter VR</button>
+        </div>
+        <p className="hint">
+          {vrSupported
+            ? 'In VR you stand in the middle of the campus, at real size. Look around!'
+            : 'VR works in a VR headset browser (e.g. Meta Quest). On this device: try the street view and drag to look around.'}
+        </p>
+      </aside>
+
+      <div className="campus-canvas">
+        <Canvas camera={{ position: VIEWS.above.position, fov: 45 }}>
+          <XR store={xrStore}>
+            {/* Where you stand in VR: on the path, between the buildings */}
+            <XROrigin position={[-48, 0, 12]} rotation={[0, -Math.PI / 2, 0]} />
+            <CampusScene openId={openId} selectedRoom={selectedRoom} onSelect={openBuilding} />
+          </XR>
+          <OrbitControls ref={controlsRef} makeDefault maxPolarAngle={Math.PI / 2.05} />
+        </Canvas>
+      </div>
+    </div>
   );
 }
-
-const styles = StyleSheet.create({
-  page: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: colors.navy },
-  card: { gap: 14, padding: 22 },
-  link: { color: colors.navy, fontWeight: '600', textDecorationLine: 'underline' },
-});
 ```
 
-Put it next to `client/src/pages/LoginPage.jsx` – the **logic is identical**. Only the building blocks change:
+- **`<Canvas>`** – the 3D area. Everything inside it is 3D; everything outside (the panel) is normal HTML.
+- **`<OrbitControls>`** – drag to turn, scroll to zoom. `maxPolarAngle` stops the camera from going under the ground.
+- **`VIEWS`** + `setView` – the buttons move the camera: from above, or standing on the path at **1.7 m** (eye height)
+- **search** – filters `ALL_ROOMS` while you type; clicking a result opens the building and highlights the room
+- **VR**:
+  - `createXRStore()` – controls the VR session; `xrStore.enterVR()` starts it
+  - `<XR store={xrStore}>` – the part of the scene that is visible in VR
+  - `<XROrigin>` – where **you** stand in VR: at the start of the path, at real size
+  - `navigator.xr.isSessionSupported('immersive-vr')` – asks the browser *"can you show VR?"*
 
-| Website | Phone |
-|---|---|
-| `<form onSubmit>` | no forms – the button's `onPress` calls `submit` |
-| `<input type="email" onChange={e => setEmail(e.target.value)}>` | `<TextInput keyboardType="email-address" onChangeText={setEmail}>` |
-| `<input type="password">` | `<TextInput secureTextEntry>` |
-| `<button>` | `<Pressable><Text>…</Text></Pressable>` – **all text must be inside `<Text>`** |
+## AA5. ✍️ Add the page to the menu
 
-`KeyboardAvoidingView` moves the form up when the keyboard opens on iPhone.
+Replace **`client/src/App.jsx`** with:
 
-## V5. ✍️ App.js: login first, then the tabs
+```jsx
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { api, getToken, setToken } from './api.js';
+import LoginPage from './pages/LoginPage.jsx';
+import MapPage from './pages/MapPage.jsx';
+import CalendarPage from './pages/CalendarPage.jsx';
 
-The map and calendar screens come in Parts W and X. For now, create two small placeholders so the app works already.
+// The 3D campus is big (three.js) – load it only when someone opens the page
+const CampusPage = lazy(() => import('./pages/CampusPage.jsx'));
 
-Create **`mobile/src/screens/MapScreen.js`**:
-
-```js
-import { Text, View } from 'react-native';
-
-export default function MapScreen() {
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>🗺️ The map comes in Part W</Text>
-    </View>
-  );
-}
-```
-
-Create **`mobile/src/screens/CalendarScreen.js`**:
-
-```js
-import { Text, View } from 'react-native';
-
-export default function CalendarScreen() {
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>📅 The calendar comes in Part X</Text>
-    </View>
-  );
-}
-```
-
-Replace **`mobile/App.js`** with:
-
-```js
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { api, getToken, setOnLogout, setToken } from './src/api';
-import LoginScreen from './src/screens/LoginScreen';
-import MapScreen from './src/screens/MapScreen';
-import CalendarScreen from './src/screens/CalendarScreen';
-import { colors } from './src/theme';
-
-const TABS = {
-  map: { label: '🗺️ 3D Map', component: MapScreen },
-  calendar: { label: '📅 Calendar', component: CalendarScreen },
+const PAGES = {
+  map: { label: '🗺️ 3D Map', component: MapPage },
+  calendar: { label: '📅 AI Calendar', component: CalendarPage },
+  campus: { label: '🏫 Campus 3D', component: CampusPage },
 };
 
 export default function App() {
-  const [user, setUser] = useState(null);       // null = not logged in
-  const [checking, setChecking] = useState(true); // looking for a saved token
-  const [tab, setTab] = useState('map');
+  const [page, setPage] = useState('map');
+  const [user, setUser] = useState(null);                            // null = not logged in
+  const [checking, setChecking] = useState(() => Boolean(getToken())); // token saved? check it first
 
+  // Page reloaded with a saved token -> ask the server who we are
   useEffect(() => {
-    setOnLogout(() => setUser(null)); // api.js calls this when the token expired
-
-    // App opened: is there a saved token? Then ask the server who we are.
-    getToken()
-      .then((token) => token && api('/auth/me').then(setUser))
+    if (!getToken()) return;
+    api('/auth/me')
+      .then(setUser)
       .catch(() => setToken(null))
       .finally(() => setChecking(false));
   }, []);
 
-  const login = async ({ token, user }) => {
-    await setToken(token);
+  // api.js fires a "logout" event when the token is no longer valid
+  useEffect(() => {
+    const onLogout = () => setUser(null);
+    window.addEventListener('logout', onLogout);
+    return () => window.removeEventListener('logout', onLogout);
+  }, []);
+
+  const login = ({ token, user }) => {
+    setToken(token);
     setUser(user);
   };
 
-  const logout = async () => {
-    await setToken(null);
+  const logout = () => {
+    setToken(null);
     setUser(null);
-    setTab('map');
+    setPage('map');
   };
 
-  let content;
-  if (checking) {
-    content = <ActivityIndicator style={{ flex: 1 }} size="large" />;
-  } else if (!user) {
-    content = <LoginScreen onLogin={login} />;
-  } else {
-    const Screen = TABS[tab].component;
-    content = (
-      <>
-        <View style={styles.header}>
-          <Text style={styles.headerText} numberOfLines={1}>{user.email}</Text>
-          <Pressable onPress={logout}><Text style={styles.logout}>Log out</Text></Pressable>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Screen />
-        </View>
-        <View style={styles.tabBar}>
-          {Object.entries(TABS).map(([key, { label }]) => (
-            <Pressable key={key} style={styles.tab} onPress={() => setTab(key)}>
-              <Text style={[styles.tabText, tab === key && styles.tabActive]}>{label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </>
-    );
-  }
+  if (checking) return <p className="hint" style={{ padding: 20 }}>Loading…</p>;
+  if (!user) return <LoginPage onLogin={login} />;
+
+  const Page = PAGES[page].component;
 
   return (
-    <SafeAreaProvider>
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.navy }}>
-        <StatusBar style="light" />
-        <View style={{ flex: 1, backgroundColor: colors.bg }}>{content}</View>
-      </SafeAreaView>
-    </SafeAreaProvider>
-  );
-}
-
-const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.navy, paddingHorizontal: 16, paddingVertical: 10 },
-  headerText: { color: '#cfd8e3', flex: 1 },
-  logout: { color: '#fff', fontWeight: '600' },
-  tabBar: { flexDirection: 'row', backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: colors.border },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 12 },
-  tabText: { fontSize: 15, color: colors.muted },
-  tabActive: { color: colors.navy, fontWeight: '700' },
-});
-```
-
-The same ideas as `client/src/App.jsx`: `user` state, check the saved token on start (`/auth/me`), `login` / `logout`, and a `TABS` object – this time as a **tab bar at the bottom**, like real apps.
-
-**📱 Test it:** the phone shows the login screen. Log in with **the same email and password as on your website**. 🎉 Your email appears at the top. Close Expo Go and open the app again → still logged in (SecureStore).
-
----
-
-# Part W – The 3D map
-
-## W1. ✍️ Map screen
-
-Replace **`mobile/src/screens/MapScreen.js`** with:
-
-```js
-import { useEffect, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
-import { api } from '../api';
-import { colors, ui } from '../theme';
-
-const CITIES = {
-  Berlin: { latitude: 52.5163, longitude: 13.3777 },
-  Cologne: { latitude: 50.9413, longitude: 6.9583 },
-  'New York': { latitude: 40.7484, longitude: -73.9857 },
-  Tokyo: { latitude: 35.6812, longitude: 139.7671 },
-};
-
-// A tilted camera = 3D look (pitch tilts it, heading turns it)
-const camera = (center) => ({ center, pitch: 60, heading: -20, altitude: 600, zoom: 17 });
-
-export default function MapScreen() {
-  const mapRef = useRef(null);
-  const [places, setPlaces] = useState([]);
-  const [pending, setPending] = useState(null); // coordinate of a new place, while we ask for its name
-  const [name, setName] = useState('');
-
-  // Load my saved places once
-  useEffect(() => {
-    api('/places').then(setPlaces).catch((err) => Alert.alert('Error', err.message));
-  }, []);
-
-  const flyTo = (center) => mapRef.current?.animateCamera(camera(center), { duration: 1500 });
-
-  // Long press on the map -> ask for a name
-  const startAdd = (e) => {
-    setPending(e.nativeEvent.coordinate);
-    setName('');
-  };
-
-  const savePlace = async () => {
-    if (!name.trim()) return;
-    try {
-      const place = await api('/places', {
-        method: 'POST',
-        body: { name: name.trim(), lat: pending.latitude, lng: pending.longitude },
-      });
-      setPlaces((prev) => [...prev, place]);
-      setPending(null);
-    } catch (err) {
-      Alert.alert('Error', err.message);
-    }
-  };
-
-  const removePlace = (place) => {
-    Alert.alert('Delete place?', place.name, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await api(`/places/${place.id}`, { method: 'DELETE' });
-          setPlaces((prev) => prev.filter((p) => p.id !== place.id));
-        },
-      },
-    ]);
-  };
-
-  return (
-    <View style={styles.page}>
-      <MapView
-        ref={mapRef}
-        style={StyleSheet.absoluteFill}
-        initialCamera={camera(CITIES.Berlin)}
-        showsBuildings
-        pitchEnabled
-        rotateEnabled
-        onLongPress={startAdd}
-      >
-        {places.map((p) => (
-          <Marker key={p.id} coordinate={{ latitude: p.lat, longitude: p.lng }} title={p.name} />
+    <div className="app">
+      <nav className="nav">
+        <strong>App Dev Course</strong>
+        {Object.entries(PAGES).map(([key, { label }]) => (
+          <a key={key} href="#" className={page === key ? 'active' : ''}
+             onClick={(e) => { e.preventDefault(); setPage(key); }}>
+            {label}
+          </a>
         ))}
-      </MapView>
-
-      {/* City buttons on top of the map */}
-      <ScrollView horizontal style={styles.topBar} contentContainerStyle={styles.row} showsHorizontalScrollIndicator={false}>
-        {Object.entries(CITIES).map(([city, center]) => (
-          <Pressable key={city} style={styles.pill} onPress={() => flyTo(center)}>
-            <Text style={styles.pillText}>{city}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      {/* My places at the bottom: tap = fly there, long press = delete */}
-      <View style={styles.bottomBar}>
-        <Text style={ui.hint}>
-          {places.length ? 'My places (tap = go, hold = delete)' : 'Hold your finger on the map to save a place'}
-        </Text>
-        <ScrollView horizontal contentContainerStyle={styles.row} showsHorizontalScrollIndicator={false}>
-          {places.map((p) => (
-            <Pressable
-              key={p.id}
-              style={ui.chip}
-              onPress={() => flyTo({ latitude: p.lat, longitude: p.lng })}
-              onLongPress={() => removePlace(p)}
-            >
-              <Text style={ui.chipText}>📍 {p.name}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Small dialog for the name of a new place */}
-      <Modal visible={!!pending} transparent animationType="fade" onRequestClose={() => setPending(null)}>
-        <View style={styles.backdrop}>
-          <View style={[ui.card, { gap: 12 }]}>
-            <Text style={ui.title}>New place</Text>
-            <TextInput style={ui.input} value={name} onChangeText={setName} placeholder="e.g. SRH Campus" autoFocus />
-            <Pressable style={ui.button} onPress={savePlace}>
-              <Text style={ui.buttonText}>Save</Text>
-            </Pressable>
-            <Pressable onPress={() => setPending(null)}>
-              <Text style={[ui.hint, { textAlign: 'center' }]}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-    </View>
+        <span className="nav-user">{user.email}</span>
+        <button className="small" onClick={logout}>Log out</button>
+      </nav>
+      <main className="main">
+        <Suspense fallback={<p className="hint" style={{ padding: 20 }}>Loading…</p>}>
+          <Page />
+        </Suspense>
+      </main>
+    </div>
   );
 }
-
-const styles = StyleSheet.create({
-  page: { flex: 1 },
-  topBar: { position: 'absolute', top: 10, left: 0, right: 0, flexGrow: 0 },
-  row: { gap: 8, paddingHorizontal: 12, alignItems: 'center' },
-  pill: { backgroundColor: colors.navy, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
-  pillText: { color: '#fff', fontWeight: '600' },
-  bottomBar: {
-    position: 'absolute', bottom: 10, left: 10, right: 10,
-    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 12, paddingVertical: 10, gap: 8,
-    paddingLeft: 12,
-  },
-  backdrop: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.4)' },
-});
 ```
 
-- **`<MapView>`** draws Apple Maps (iPhone) or Google Maps (Android)
-- **`camera`**: `pitch: 60` tilts the view, `heading` turns it, `showsBuildings` → **3D buildings**
-- **`animateCamera`** flies smoothly to a city – the same idea as `map.flyTo` on the website
-- **`onLongPress`** – hold your finger on the map → a **`Modal`** (small window) asks for the name → `POST /api/places`
-- **`<Marker>`** – one pin per saved place
-- `StyleSheet.absoluteFill` – the map fills the whole screen; the buttons float on top (`position: 'absolute'`)
+New: **`lazy(() => import('./pages/CampusPage.jsx'))`** and **`<Suspense>`**. three.js is big (about 1 MB). With `lazy`, the browser downloads it **only when someone opens the Campus page** – the login and calendar stay fast. `<Suspense fallback=…>` shows *"Loading…"* while it downloads.
 
-**📱 Test it:** **3D Map** tab → you see your places from the website (e.g. Brandenburg Gate). Tap **Tokyo** → the camera flies there. Tilt with two fingers. Hold your finger on a building → name it → it appears on the **website** too (refresh it)!
+Add these styles **at the end** of **`client/src/index.css`**:
 
----
-
-# Part X – The calendar
-
-## X1. ✍️ Copy the date helpers
-
-The date helpers are plain JavaScript – they work on the phone unchanged. Create the folder **`mobile/src/utils`** and copy the file:
-
-```bash
-mkdir -p src/utils
-cp ../client/src/utils/dates.js src/utils/dates.js
+```css
+/* Campus 3D page (step 10) */
+.campus-layout { display: flex; height: 100%; }
+.campus-layout .panel { width: 320px; display: flex; flex-direction: column; gap: 10px; }
+.campus-layout h2, .campus-layout h3 { margin: 0; }
+.campus-search { width: 100%; }
+.campus-canvas { flex: 1; background: #dbe7f3; }
+.campus-floors { display: flex; flex-direction: column; gap: 8px; }
+.campus-room { padding: 2px 0 2px 8px; }
+.campus-room.active { font-weight: 700; background: #fff3cd; border-radius: 4px; }
+.campus-views { margin-top: auto; display: flex; flex-wrap: wrap; gap: 6px; }
 ```
-
-*(Run this inside `mobile/`. On Windows without Git Bash: copy `client/src/utils/dates.js` to `mobile/src/utils/dates.js` in VS Code.)*
-
-## X2. ✍️ Calendar screen
-
-Replace **`mobile/src/screens/CalendarScreen.js`** with:
-
-```js
-import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { api } from '../api';
-import { addDays, formatLong, relative, todayYMD } from '../utils/dates';
-import { colors, ui } from '../theme';
-
-const PRIORITIES = ['low', 'medium', 'high'];
-const QUICK_DEADLINES = [3, 7, 14, 30]; // "in X days" buttons instead of a date picker
-
-const emptyForm = () => ({ title: '', hours: '3', deadline: addDays(todayYMD(), 7), priority: 'medium' });
-
-export default function CalendarScreen() {
-  const [tasks, setTasks] = useState([]);
-  const [plan, setPlan] = useState({ days: {}, atRisk: [] });
-  const [form, setForm] = useState(emptyForm);
-  const [refreshing, setRefreshing] = useState(false);
-
-  // Load tasks + plan from the same API as the website
-  const load = useCallback(async () => {
-    const [list, newPlan] = await Promise.all([
-      api('/tasks'),
-      api('/tasks/plan', { method: 'POST', body: { maxHoursPerDay: 4, today: todayYMD() } }),
-    ]);
-    setTasks(list);
-    setPlan(newPlan);
-  }, []);
-
-  useEffect(() => {
-    load().catch((err) => Alert.alert('Error', err.message));
-  }, [load]);
-
-  const refresh = async () => {
-    setRefreshing(true);
-    try { await load(); } finally { setRefreshing(false); }
-  };
-
-  // ---- Task actions (after each change: load again, so the plan updates) ----
-  const addTask = async () => {
-    if (!form.title.trim()) return Alert.alert('Please enter a title');
-    try {
-      await api('/tasks', { method: 'POST', body: { ...form, hours: Number(form.hours) || 1 } });
-      setForm(emptyForm());
-      await load();
-    } catch (err) {
-      Alert.alert('Error', err.message);
-    }
-  };
-
-  const toggleDone = async (task) => {
-    await api(`/tasks/${task.id}`, { method: 'PATCH', body: { done: !task.done } });
-    await load();
-  };
-
-  const removeTask = (task) => {
-    Alert.alert('Delete task?', task.title, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await api(`/tasks/${task.id}`, { method: 'DELETE' }); await load(); } },
-    ]);
-  };
-
-  // ---- Agenda: every day that has work sessions or deadlines, sorted ----
-  const agenda = {};
-  for (const [day, sessions] of Object.entries(plan.days)) {
-    agenda[day] = sessions.map((s, i) => ({ key: `s${s.taskId}-${i}`, text: `📖 ${s.title}`, hours: s.hours }));
-  }
-  for (const t of tasks.filter((t) => !t.done)) {
-    (agenda[t.deadline] ||= []).push({ key: `d${t.id}`, text: `🏁 ${t.title} is due`, color: t.color });
-  }
-  const days = Object.keys(agenda).filter((d) => d >= todayYMD()).sort().slice(0, 14);
-
-  return (
-    <ScrollView
-      style={styles.page}
-      contentContainerStyle={{ padding: 16 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Text style={ui.title}>AI Calendar</Text>
-      <Text style={[ui.hint, { marginBottom: 12 }]}>Add a task – your work gets spread out before the deadline.</Text>
-
-      {/* ---- New task ---- */}
-      <View style={[ui.card, { gap: 10 }]}>
-        <TextInput
-          style={ui.input}
-          placeholder="What do you need to do?"
-          value={form.title}
-          onChangeText={(title) => setForm({ ...form, title })}
-        />
-        <View style={styles.row}>
-          <Text style={ui.label}>Hours</Text>
-          <TextInput
-            style={[ui.input, { width: 70 }]}
-            keyboardType="numeric"
-            value={form.hours}
-            onChangeText={(hours) => setForm({ ...form, hours })}
-          />
-          <Text style={[ui.hint, { flex: 1, textAlign: 'right' }]}>Due {formatLong(form.deadline)}</Text>
-        </View>
-        <View style={styles.row}>
-          {QUICK_DEADLINES.map((n) => {
-            const active = form.deadline === addDays(todayYMD(), n);
-            return (
-              <Pressable key={n} style={[ui.chip, active && ui.chipActive]} onPress={() => setForm({ ...form, deadline: addDays(todayYMD(), n) })}>
-                <Text style={[ui.chipText, active && ui.chipTextActive]}>{n} days</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        <View style={styles.row}>
-          {PRIORITIES.map((p) => (
-            <Pressable key={p} style={[ui.chip, form.priority === p && ui.chipActive]} onPress={() => setForm({ ...form, priority: p })}>
-              <Text style={[ui.chipText, form.priority === p && ui.chipTextActive]}>{p}</Text>
-            </Pressable>
-          ))}
-        </View>
-        <Pressable style={ui.button} onPress={addTask}>
-          <Text style={ui.buttonText}>+ Add task</Text>
-        </Pressable>
-      </View>
-
-      {/* ---- At-risk warning ---- */}
-      {plan.atRisk.length > 0 && (
-        <View style={[ui.card, { backgroundColor: colors.warnBg }]}>
-          <Text style={{ fontWeight: '600' }}>⚠️ Not enough time before the deadline:</Text>
-          {plan.atRisk.map((r) => (
-            <Text key={r.taskId}>• {r.title}: {r.missingHours}h missing</Text>
-          ))}
-        </View>
-      )}
-
-      {/* ---- Agenda ---- */}
-      <Text style={styles.heading}>Your plan</Text>
-      {days.length === 0 && <Text style={ui.hint}>Nothing planned yet.</Text>}
-      {days.map((day) => (
-        <View key={day} style={ui.card}>
-          <Text style={styles.day}>{formatLong(day)} · {relative(day)}</Text>
-          {agenda[day].map((item) => (
-            <View key={item.key} style={styles.item}>
-              <Text style={[styles.itemText, item.color && { color: item.color, fontWeight: '600' }]}>{item.text}</Text>
-              {item.hours ? <Text style={ui.hint}>{item.hours}h</Text> : null}
-            </View>
-          ))}
-        </View>
-      ))}
-
-      {/* ---- All tasks ---- */}
-      <Text style={styles.heading}>Tasks</Text>
-      {tasks.length === 0 && <Text style={ui.hint}>No tasks yet.</Text>}
-      {tasks.map((t) => (
-        <View key={t.id} style={[ui.card, styles.task, t.done && { opacity: 0.5 }]}>
-          <Pressable onPress={() => toggleDone(t)} style={[styles.check, t.done && { backgroundColor: colors.navy }]}>
-            {t.done ? <Text style={{ color: '#fff' }}>✓</Text> : null}
-          </Pressable>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.taskTitle, t.done && { textDecorationLine: 'line-through' }]}>{t.title}</Text>
-            <Text style={ui.hint}>{t.hours}h · {t.priority} · due {relative(t.deadline)}</Text>
-          </View>
-          <View style={[styles.dot, { backgroundColor: t.color }]} />
-          <Pressable onPress={() => removeTask(t)} hitSlop={10}>
-            <Text style={{ fontSize: 18, color: colors.muted }}>✕</Text>
-          </Pressable>
-        </View>
-      ))}
-    </ScrollView>
-  );
-}
-
-const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: colors.bg },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  heading: { fontSize: 18, fontWeight: '700', marginVertical: 8 },
-  day: { fontWeight: '700', marginBottom: 6 },
-  item: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
-  itemText: { flex: 1 },
-  task: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  check: { width: 26, height: 26, borderRadius: 6, borderWidth: 2, borderColor: colors.navy, alignItems: 'center', justifyContent: 'center' },
-  taskTitle: { fontWeight: '600', fontSize: 16 },
-  dot: { width: 10, height: 10, borderRadius: 5 },
-});
-```
-
-A month grid is too small for a phone, so we show an **agenda**: the next days, each with its work sessions 📖 and deadlines 🏁.
-
-- the **plan comes from the same server**: `POST /api/tasks/plan` – we didn't write the planner again!
-- **"3 / 7 / 14 / 30 days"** buttons instead of a date picker – faster to tap on a phone
-- `RefreshControl` – **pull down** to reload (like in every app)
-- after every change we call `load()` again, so the plan updates
-
-**📱 Test it:** **Calendar** tab → your tasks from the website are here. Add *"Read paper"*, 4h, 7 days → it appears in the plan, split into sessions. Tick a task as done → the website shows it as done too. **One database, two apps.** 🎉
-
----
-
-# Part Y – Test the phone app automatically
-
-You can't tap through the app after every change. Tests can – without a phone.
-
-## Y1. Install the test tools
-
-Inside `mobile/`:
-
-```bash
-npm install --save-dev jest-expo jest @testing-library/react-native test-renderer undici
-```
-
-- **jest-expo** – runs React Native code on your laptop
-- **@testing-library/react-native** – *"find the button with this text, press it"*
-- **undici** – a real `fetch`, so the tests talk to your real server
-
-Open **`mobile/package.json`** and add two things: the line `"test": "jest"` inside `"scripts"`, and a new block `"jest": { "preset": "jest-expo" }` at the end.
 
 <details>
-<summary>✅ <b>Checkpoint:</b> your <code>mobile/package.json</code> should now look like this</summary>
+<summary>✅ <b>Checkpoint:</b> your <code>client/src/index.css</code> should now look like this</summary>
 
-Your version numbers may be a little different – that's fine.
+```css
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, sans-serif; color: #1d1d1f; background: #f6f6f8; }
 
-```json
-{
-  "name": "mobile",
-  "version": "1.0.0",
-  "main": "index.js",
-  "dependencies": {
-    "expo": "~58.0.22",
-    "expo-secure-store": "~58.0.2",
-    "expo-status-bar": "~58.0.4",
-    "react": "19.3.0",
-    "react-native": "0.88.1",
-    "react-native-maps": "1.29.11",
-    "react-native-safe-area-context": "~5.10.1"
-  },
-  "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
-    "test": "jest"
-  },
-  "private": true,
-  "devDependencies": {
-    "@testing-library/react-native": "^14.1.0",
-    "jest": "^30.5.2",
-    "jest-expo": "~58.0.13",
-    "test-renderer": "^1.3.1",
-    "undici": "^8.12.3"
-  },
-  "jest": {
-    "preset": "jest-expo"
-  }
+.app { display: flex; flex-direction: column; height: 100vh; }
+.nav { display: flex; gap: 20px; align-items: center; padding: 12px 20px; background: #1d3557; color: white; }
+.nav a { color: #cfd8e3; text-decoration: none; }
+.nav a.active { color: white; font-weight: 600; }
+.main { flex: 1; overflow: auto; }
+
+button { padding: 8px 12px; border: 0; border-radius: 6px; background: #1d3557; color: white; cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: default; }
+button.small { padding: 2px 8px; background: #e0e0e5; color: #333; }
+input { padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
+label { display: flex; flex-direction: column; font-size: 12px; gap: 4px; }
+.hint { color: #666; font-size: 13px; }
+
+.list { list-style: none; padding: 0; }
+.list li { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #eee; }
+.link { cursor: pointer; color: #1d3557; }
+
+/* Map page */
+.map-layout { display: flex; height: 100%; }
+.panel { width: 280px; padding: 16px; background: white; overflow: auto; }
+.buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.map { flex: 1; }
+
+/* Calendar page */
+.simple-page { max-width: 560px; padding: 20px; }
+select { padding: 8px; border: 1px solid #ccc; border-radius: 6px; background: white; }
+button.ghost { background: transparent; color: #1d3557; border: 1px solid #1d3557; }
+.card { background: white; border-radius: 10px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.dot.deadline { background: #1d3557; }
+.dot.session { background: #1d355733; border-left: 3px solid #1d3557; border-radius: 2px; }
+
+.cal-page { display: grid; grid-template-columns: 340px 1fr; gap: 20px; padding: 20px; align-items: start; }
+.cal-side h2 { margin: 0; }
+.cal-side .form, .simple-page .form { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.cal-side .row, .simple-page .row { display: grid; grid-template-columns: 1.4fr 0.8fr 1fr; gap: 8px; }
+.cal-side .row input, .cal-side .row select, .simple-page .row input { width: 100%; }
+
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stats div { background: white; border-radius: 10px; padding: 10px; text-align: center; }
+.stats b { display: block; font-size: 20px; }
+.stats span { font-size: 12px; color: #666; }
+.stats .bad b { color: #d62828; }
+
+.warning { background: #fff3cd; padding: 10px; border-radius: 8px; margin: 10px 0; font-size: 13px; }
+.warning ul { margin: 6px 0; padding-left: 18px; }
+.plan-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; margin-top: 10px; }
+.plan-row input { width: 80px; }
+
+.task-list { list-style: none; padding: 0; margin: 0; }
+.task-list li { display: flex; gap: 10px; align-items: center; background: white; border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; }
+.task-list li.done { opacity: 0.5; }
+.task-list li.done .task-title { text-decoration: line-through; }
+.task-info { flex: 1; cursor: pointer; min-width: 0; }
+.task-title { font-weight: 600; }
+.task-meta { font-size: 12px; color: #666; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.badge { font-size: 10px; padding: 1px 6px; border-radius: 10px; text-transform: uppercase; font-weight: 600; }
+.badge.high { background: #fde2e4; color: #c1121f; }
+.badge.medium { background: #fff1d6; color: #b5651d; }
+.badge.low { background: #e3f2e1; color: #2d6a4f; }
+
+.cal { background: white; border-radius: 10px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.cal-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.cal-header h3 { margin: 0; flex: 1; text-align: center; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-weekday { text-align: center; font-size: 12px; font-weight: 600; color: #666; padding: 4px 0; }
+.cal-cell { min-height: 96px; border: 1px solid #eee; border-radius: 6px; padding: 4px; cursor: pointer; overflow: hidden; }
+.cal-cell:hover { border-color: #a8b8d0; }
+.cal-cell.muted { background: #fafafa; color: #aaa; }
+.cal-cell.past { opacity: 0.6; }
+.cal-cell.today { border: 2px solid #1d3557; }
+.cal-cell.selected { background: #eef3fb; }
+.cal-day { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+.cal-hours { font-weight: 500; color: #1d3557; background: #e8eef7; border-radius: 8px; padding: 0 5px; }
+.chip { font-size: 11px; padding: 2px 5px; border-radius: 4px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip.deadline { color: white; font-weight: 600; }
+.chip.session { border-left: 3px solid; color: #333; }
+.chip.done { text-decoration: line-through; opacity: 0.6; }
+.chip.more { color: #666; }
+.cal-legend { display: flex; gap: 16px; font-size: 12px; color: #666; margin-top: 8px; }
+.cal-legend span { display: flex; align-items: center; gap: 6px; }
+
+.day-details { margin-top: 12px; }
+.day-details h3 { margin: 0 0 8px; }
+.day-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 14px; }
+
+@media (max-width: 900px) {
+  .cal-page { grid-template-columns: 1fr; }
+  .cal-cell { min-height: 70px; }
 }
+
+/* Login page (step 6) */
+.login-page { min-height: 100vh; display: grid; place-items: center; padding: 20px; background: #1d3557; }
+.login-card { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 12px; padding: 24px; }
+.login-card h2 { margin: 0; }
+.login-card input { width: 100%; }
+.error { background: #fde2e4; color: #c1121f; padding: 8px 10px; border-radius: 6px; font-size: 13px; margin: 0; }
+.nav-user { margin-left: auto; font-size: 13px; color: #cfd8e3; }
+
+/* Campus 3D page (step 10) */
+.campus-layout { display: flex; height: 100%; }
+.campus-layout .panel { width: 320px; display: flex; flex-direction: column; gap: 10px; }
+.campus-layout h2, .campus-layout h3 { margin: 0; }
+.campus-search { width: 100%; }
+.campus-canvas { flex: 1; background: #dbe7f3; }
+.campus-floors { display: flex; flex-direction: column; gap: 8px; }
+.campus-room { padding: 2px 0 2px 8px; }
+.campus-room.active { font-weight: 700; background: #fff3cd; border-radius: 4px; }
+.campus-views { margin-top: auto; display: flex; flex-wrap: wrap; gap: 6px; }
 ```
 </details>
 
-## Y2. ✍️ The screen test
+## AA6. 👀 Explore it
 
-Create the folder **`mobile/__tests__`** and in it **`mobile/__tests__/app.test.js`**:
+`npm run dev` → log in → **🏫 Campus 3D**.
 
-```js
-// Screen tests: render the real App and use it like a user would.
-// The app talks to a REAL server – start it first with `npm run dev` in the root folder.
-//   cd mobile && npm test
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { fetch as realFetch } from 'undici';
-import App from '../App';
-
-// The React Native test setup replaces fetch with a fake. We want REAL requests to our server.
-global.fetch = realFetch;
-
-const API = process.env.TEST_API_URL || 'http://localhost:3001';
-
-// Point the app at the local server instead of the live one
-jest.mock('../src/config', () => ({ API_URL: process.env.TEST_API_URL || 'http://localhost:3001' }));
-
-// SecureStore needs a real phone – in tests we keep the token in memory
-jest.mock('expo-secure-store', () => {
-  const store = {};
-  return {
-    getItemAsync: async (k) => store[k] ?? null,
-    setItemAsync: async (k, v) => { store[k] = v; },
-    deleteItemAsync: async (k) => { delete store[k]; },
-  };
-});
-
-// Safe-area sizes come from the phone – use the library's test version
-jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
-
-// Maps need a real phone too – replace them with simple views
-jest.mock('react-native-maps', () => {
-  const React = require('react');
-  const { View, Text } = require('react-native');
-  const MapView = React.forwardRef((props, ref) => {
-    React.useImperativeHandle(ref, () => ({ animateCamera: jest.fn() }));
-    return <View testID="map">{props.children}</View>;
-  });
-  const Marker = ({ title }) => <Text>marker:{title}</Text>;
-  return { __esModule: true, default: MapView, Marker };
-});
-
-jest.setTimeout(30000);
-
-beforeAll(async () => {
-  const res = await fetch(`${API}/api/health`).catch(() => null);
-  if (!res?.ok) throw new Error(`Start the server first (npm run dev in the root folder). No answer from ${API}`);
-});
-
-test('register, see the 3D map with the welcome place, add a task', async () => {
-  const email = `phone-${Date.now()}@test.de`;
-  await render(<App />);
-
-  // 1. Login screen -> switch to "create account"
-  await fireEvent.press(await screen.findByText('Create one'));
-  await fireEvent.changeText(screen.getByPlaceholderText('you@example.com'), email);
-  await fireEvent.changeText(screen.getByPlaceholderText('at least 6 characters'), 'secret123');
-  await fireEvent.press(screen.getByText('Create account'));
-
-  // 2. Logged in: email in the header, map tab with the welcome place
-  expect(await screen.findByText(email)).toBeTruthy();
-  expect(screen.getByTestId('map')).toBeTruthy();
-  expect(await screen.findByText('marker:Brandenburg Gate')).toBeTruthy();
-
-  // 3. Calendar tab: add a task -> it shows up in the task list and in the plan
-  await fireEvent.press(screen.getByText('📅 Calendar'));
-  await fireEvent.changeText(await screen.findByPlaceholderText('What do you need to do?'), 'Phone task');
-  await fireEvent.press(screen.getByText('+ Add task'));
-  await waitFor(() => expect(screen.getAllByText(/Phone task/).length).toBeGreaterThan(1));
-  expect(screen.getAllByText('📖 Phone task').length).toBeGreaterThan(0); // work sessions
-
-  // 4. Log out -> back to the login screen
-  await fireEvent.press(screen.getByText('Log out'));
-  expect(await screen.findByText('👋 Welcome back')).toBeTruthy();
-});
-
-test('wrong password shows the server message', async () => {
-  await render(<App />);
-  await fireEvent.changeText(await screen.findByPlaceholderText('you@example.com'), 'nobody@test.de');
-  await fireEvent.changeText(screen.getByPlaceholderText('at least 6 characters'), 'wrong-password');
-  await fireEvent.press(screen.getByText('Log in'));
-  expect(await screen.findByText('Wrong email or password')).toBeTruthy();
-});
-```
-
-- **`jest.mock(...)`** replaces things that only exist on a real phone (SecureStore, the map, screen insets) with simple fakes
-- the test **renders the real `App`**, types an email, presses *Create account*, checks the map and the calendar – like a user
-- it talks to your **local** server (`localhost:3001`), not the live one, so test accounts don't end up in your real database
-
-## Y3. Run it
-
-Terminal 1, in the **root** folder: `npm run dev` (starts the local server). Terminal 2:
-
-```bash
-cd mobile
-npm test
-```
-
-👀 **You see:** `Tests: 2 passed`. *(Yellow "act(...)" warnings are normal here.)*
-
-## Y4. ✍️ GitHub runs the phone tests too
-
-Replace **`.github/workflows/ci.yml`** (root folder) with:
-
-```yaml
-# Runs automatically on GitHub every time someone pushes code.
-# Green check = the app builds and all tests pass. Red cross = something broke.
-name: CI
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-
-    # A throw-away PostgreSQL database just for the tests
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: course
-          POSTGRES_PASSWORD: course
-          POSTGRES_DB: appdev
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
-
-    env:
-      DATABASE_URL: postgresql://course:course@localhost:5432/appdev
-      JWT_SECRET: ci-test-secret
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci           # install exactly the versions in package-lock.json
-      - run: npm run build    # does the frontend build?
-      - run: npm test         # planner + API tests
-
-      # Mobile app: start the API in the background, then test the phone screens against it
-      - name: Mobile app tests
-        run: |
-          npm start -w server &
-          for i in $(seq 1 30); do curl -sf localhost:3001/api/health && break; sleep 1; done
-          cd mobile
-          npm ci
-          npm test
-```
-
-New last step: start the API in the background, then install and test the mobile app.
-
-Create **`.vercelignore`** in the **root** folder, so Vercel doesn't upload the phone app with the website:
-
-```
-# The phone app is not part of the website deployment
-mobile
-```
-
-Back in the **root** folder, save and push everything:
-
-```bash
-cd ..
-git add .
-git commit -m "Lesson 8: mobile app"
-git push
-```
-
-GitHub → **Actions** → green ✅ for the website **and** the phone app.
+1. Drag to turn the campus, scroll to zoom.
+2. Click **Library** → the floors move apart, three rooms appear, the panel lists them by floor.
+3. Type **`A2`** in the search → click **Room A2.14 (App Dev)** → Building A opens, the room glows yellow.
+4. **🚶 Street view** → you stand at the start of the path. Drag to look around.
+5. Click the grass → the building closes.
 
 ---
 
-# 🎉 You built a mobile app!
+# Part AB – VR
 
-| | Website | Phone app |
-|---|---|---|
-| Folder | `client/` | `mobile/` |
-| Built with | React + Vite | React Native + Expo |
-| Runs in | the browser | Expo Go (later: App Store / Play Store) |
-| Server, database, login, planner | **shared** | **shared** |
+## 💡 How VR works in the browser
+
+**WebXR** is a browser feature for VR (and AR). The page asks *"can you show VR?"*; if yes, `enterVR()` switches the headset into VR and three.js draws the scene twice – once per eye.
+
+| Device | VR? |
+|---|---|
+| **Meta Quest** (browser) | ✅ best experience |
+| **Android phone** with Chrome + a cardboard viewer | ✅ |
+| iPhone (Safari) | ❌ no WebXR – use the street view |
+| Laptop | ❌ (no headset) – the button explains this |
+
+## AB1. 🥽 Try it on a headset
+
+The headset must open your page **online** – `localhost` only exists on your laptop.
+
+1. Push your code (Lesson 7) → Vercel builds it → open your link in the **Meta Quest browser** (or Android Chrome).
+2. Log in → **🏫 Campus 3D** → **🥽 Enter VR**.
+3. You stand at the start of the path. Look around – the buildings are at **real size**.
+
+> No headset in class? Pass one around, or use the street view – the scene is the same.
+
+---
+
+# 🎉 You built a 3D campus!
 
 ## 🛠️ Troubleshooting
 
 | You see | Fix |
 |---|---|
-| QR code scanned, but *"Could not connect to development server"* | same Wi-Fi? Otherwise `npx expo start --tunnel` |
-| *"No connection to the server"* | wrong link in `src/config.js` – open `<your link>/api/health` on the phone's browser |
-| *"Server is not configured…"* | your live server misses a variable – Lesson 7, T7 |
-| *"Wrong email or password"* but it works on the website | check the email for a capital letter / space at the end |
-| Red error screen in the app | read the first line – it names the file and line. Fix, save, the app reloads |
-| `npm test`: *"Start the server first"* | run `npm run dev` in the root folder in another terminal |
+| The 3D area stays empty / white | update your browser; in Chrome check `chrome://gpu` → *WebGL: Hardware accelerated* |
+| *"WARNING: Multiple instances of Three.js"* in the console | add `'three'` to `dedupe` in `vite.config.js` (AA1), restart `npm run dev` |
+| **Enter VR** says *"This device cannot show VR"* | correct on a laptop or iPhone – open the online version on a headset (AB1) |
+| The page loads slowly the first time | three.js is downloading (~1 MB, only once) |
 
 ## 💪 Bonus exercises
 
-**A.** Show a small "👋 Hi, *name*" on the calendar screen. *(Hint: pass `user` from `App.js` as a prop.)*
+**A.** **Your real campus:** measure your campus buildings (Google Maps → right click → *Measure distance*), and replace the buildings and rooms in `campus.js`. Nothing else has to change!
 
-**B.** Add a third tab **"Profile"** with your email and the log-out button. *(Hint: one more entry in `TABS`.)*
+**B.** Give each room a **description** (opening hours, who sits there) and show it in the panel when it is selected.
 
-**C.** Use the phone's location: `npx expo install expo-location`, then add `showsUserLocation` to `<MapView>`.
+**C.** Move the camera to the opened building automatically. *(Hint: `controlsRef.current.target.set(x, 5, z)` in `openBuilding`.)*
 
-**D.** Put the app on your phone **without** Expo Go: look up **EAS Build** (`npx eas-cli build --profile preview`).
+**D.** Save "favourite rooms" in the database – like the places on the map (Lesson 2 and 6).
 
 ## 📖 Words you learned
 
 | Word | Meaning |
 |---|---|
-| **React Native** | React for iPhone and Android apps – real native screens, not a website |
-| **Expo / Expo Go** | tools to build and run React Native apps without Xcode or Android Studio |
-| **`View` / `Text` / `Pressable` / `TextInput`** | the phone's versions of `div`, `p`, `button`, `input` |
-| **`StyleSheet`** | styles as JavaScript objects (camelCase, no units) |
-| **SecureStore** | encrypted storage on the phone (for the token) |
-| **Modal** | a small window on top of the screen |
-| **Mock** | a fake replacement used in tests |
-| **Hot reload** | save a file → the phone updates instantly |
+| **three.js** | JavaScript library for 3D graphics in the browser |
+| **WebGL** | the browser feature that draws 3D with the graphics card |
+| **Mesh / geometry / material** | a 3D object / its shape / its surface |
+| **Scene, camera, light** | the world, the eye that looks at it, what makes it visible |
+| **Sprite** | a flat picture in 3D that always faces the camera |
+| **WebXR** | the browser feature for VR and AR |
+| **Lazy loading** | download code only when it is needed |
