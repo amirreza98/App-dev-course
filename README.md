@@ -40,7 +40,7 @@ Open **http://localhost:5173**. Stop the app with **Control + C**. From step 5 o
 
 | | |
 |---|---|
-| ⏱️ Time | ~60 min |
+| ⏱️ Time | ~75 min |
 | 🏁 Start from | your code from Lesson 6 (or `git checkout -f step-7-deploy` for the finished result) |
 | ✅ Finished result | branch `step-7-deploy` |
 | 🎯 You will | put the app on the internet with a real link, and let GitHub test every change automatically |
@@ -517,59 +517,116 @@ git push
 
 Open your repository on GitHub → tab **Actions**. After about a minute: a green ✅ next to your commit. Red ❌ = click it and read which step failed.
 
-> No GitHub repository yet? On github.com click **New repository**, then follow the commands GitHub shows under *"…push an existing repository"*.
+> No GitHub repository of your own yet? Do **T1** below first, then come back.
 
 ---
 
 # Part T – Go live
 
-## T1. Database and secret ready?
+You do these steps once, in the browser. Keep this page open next to it.
 
-You need two values – the same kind as in your `server/.env`:
+## T1. Put your code on GitHub
 
-| Name | Where to get it |
-|---|---|
-| `DATABASE_URL` | Neon → your project → **Connect** (you may use the same database as on your laptop) |
-| `JWT_SECRET` | a **new** random text: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+Vercel deploys straight from GitHub, so your code must be there.
+
+- **You cloned the course repo?** Make it your own: on GitHub click **New repository** (name: `app-dev-course`, **without** README), then in your project folder:
+
+```bash
+git remote set-url origin https://github.com/YOUR-USERNAME/app-dev-course.git
+git push -u origin --all
+```
+
+- **You built it yourself from Lesson 0?** Create the repository the same way, then:
+
+```bash
+git remote add origin https://github.com/YOUR-USERNAME/app-dev-course.git
+git push -u origin --all
+```
+
+✅ On GitHub you see your files, including **`vercel.json`** and the **`api/`** folder.
+
+> Work on a branch, e.g. `step-7-deploy`? That's fine – remember its name, you need it in T4.
 
 ## T2. Create the project on Vercel
 
-1. Go to **https://vercel.com** → sign up with **GitHub**.
-2. **Add New… → Project** → find your repository → **Import**.
-3. On the settings screen:
-   - **Framework Preset:** `Other`
-   - **Root Directory:** leave it as `./` (the root folder – *not* `client`!)
-   - Build and output settings: leave them – `vercel.json` already has them
-4. Open **Environment Variables** and add:
-   - `DATABASE_URL` = your Neon connection string
-   - `JWT_SECRET` = your random text
-   - (optional) `OPENAI_API_KEY`
-5. Click **Deploy**. ☕ About one minute.
+1. Go to **https://vercel.com** → **Sign Up** → **Continue with GitHub**.
+2. **Add New… → Project**. In the list, find **app-dev-course** → **Import**.
+   *(Not in the list? Click **Adjust GitHub App Permissions** and allow access to the repository.)*
+3. On the **Configure Project** screen, set exactly:
 
-> Your code is on a branch other than `main`? After the project exists: **Settings → Environments → Production → Branch Tracking**, or simply merge your work into `main`.
-
-## T3. 👀 Check your live app
-
-Vercel shows your link, e.g. `https://app-dev-course-xyz.vercel.app`.
-
-1. Open **`<your link>/api/health`** → `{"ok":true}` – the Express function runs on Vercel.
-2. Open **`<your link>`** → the login page. Register, add a task, save a place on the map.
-3. Send the link to a classmate: they register and see **their own, empty** calendar. 🎉
-
-| You see | Fix |
+| Setting | Value |
 |---|---|
-| `Server is not configured: DATABASE_URL missing` | add the variable in **Settings → Environment Variables**, then **Deployments → ⋯ → Redeploy** |
-| Build error *"No Output Directory named dist"* | **Root Directory** must be `./`, not `client` (Settings → Build and Deployment) |
-| Login page loads, but every action fails | open **Deployments → your deployment → Logs** and read the red line |
+| **Project Name** | anything, e.g. `app-dev-course-yourname` – this becomes your link |
+| **Framework Preset** | **Other** |
+| **Root Directory** | `./` – leave it! **Not** `client` |
+| Build / Output / Install | don't touch – `vercel.json` sets them |
 
-## T4. From now on: push = deploy
+4. Open **Environment Variables** and add one variable:
+   - Key **`JWT_SECRET`**, Value: a new random text from
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+5. Click **Deploy**.
+
+👀 After about a minute you get a link. The first version may show *"Server is not configured: DATABASE_URL missing"* when you try to register – correct, there is no database yet.
+
+## T3. Add the database (inside Vercel)
+
+1. In your project, open the tab **Storage** → **Create Database** → **Neon** (Serverless Postgres) → **Continue**.
+2. Plan **Free**, region **Frankfurt (fra1)** or the closest → **Create**.
+3. **Connect Project**: choose your project, tick **Production** and **Preview** → **Connect**.
+
+Vercel now adds **`DATABASE_URL`** (and some other `PG…` variables) to your project automatically. Check it: **Settings → Environment Variables** – you see `DATABASE_URL` and `JWT_SECRET`.
+
+> Want the same data as on your laptop? Copy the connection string from Neon (**Connect**) into your `server/.env` as `DATABASE_URL`.
+
+## T4. Tell Vercel which branch is "live"
+
+Vercel calls the live version **Production**. By default it uses the branch **`main`**.
+
+- Your finished code is on **`main`** → nothing to do.
+- Your finished code is on another branch (e.g. `step-7-deploy`) → **Settings → Environments → Production → Branch Tracking** → enter the branch name → **Save**.
+
+> ⚠️ Branches from older lessons have no `vercel.json` and **will show red ❌ builds** on Vercel. That's expected and harmless – only the production branch matters.
+
+## T5. Deploy again with the database
+
+Environment variables are only read when a version is **built**, so build once more:
+
+**Deployments** → the newest deployment **of your production branch** (check the branch name next to it!) → **⋯** → **Redeploy** → **Redeploy**.
+
+## T6. 👀 Check your live app
+
+Your link is shown on the project page, e.g. `https://app-dev-course-yourname.vercel.app`.
+
+1. **`<your link>/api/health`** → `{"ok":true}` → the Express function runs on Vercel.
+2. **`<your link>`** → login page → **Create one** → register → you're in. 🎉
+3. Add a task, save a place on the map, refresh → still there (Neon!).
+4. Send the link to a classmate: they register and see **their own, empty** calendar.
+
+**Look behind the scenes:** project → **Logs**. You see every API request, and `✅ Database ready` after the first one.
+
+## T7. Troubleshooting
+
+| You see | Why | Fix |
+|---|---|---|
+| `Server is not configured: DATABASE_URL missing` | no database, or not redeployed after adding it | T3, then T5 |
+| `Server is not configured: JWT_SECRET missing` | variable forgotten | **Settings → Environment Variables** → add it → T5 |
+| Build error *"No Output Directory named dist"* or *"…named public"* | wrong **Root Directory**, or you built an old branch without `vercel.json` | Root Directory `./` (**Settings → Build and Deployment**); redeploy the right branch |
+| Classmates see a **Vercel login page** | Deployment Protection is on | **Settings → Deployment Protection → Vercel Authentication** → off for Production, or share the production link (not a preview link) |
+| Page loads, but every action fails | error in the function | project → **Logs** → read the red line |
+| A warning *"SECURITY WARNING: The SSL modes…"* in the logs | only a notice from the `pg` library | nothing to do |
+
+## T8. From now on: push = deploy
 
 Vercel is connected to GitHub:
 
-- `git push` to **`main`** → a new **production** version, at your fixed link
-- push to any other branch → a **preview** link to test first
+- `git push` to your **production branch** → the live version is updated in ~1 minute
+- push to any other branch → a separate **preview** link to test first
 
-Change the heading in `CalendarPage.jsx`, commit, push, and watch both: GitHub Actions tests it ✅, Vercel deploys it 🚀.
+Try it: change the heading in `CalendarPage.jsx`, commit, push – GitHub Actions tests it ✅, Vercel deploys it 🚀.
 
 ---
 
