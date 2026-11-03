@@ -1,12 +1,16 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { api, getToken, setToken } from './api.js';
 import LoginPage from './pages/LoginPage.jsx';
 import MapPage from './pages/MapPage.jsx';
 import CalendarPage from './pages/CalendarPage.jsx';
 
+// The 3D campus is big (three.js) – load it only when someone opens the page
+const CampusPage = lazy(() => import('./pages/CampusPage.jsx'));
+
 const PAGES = {
   map: { label: '🗺️ 3D Map', component: MapPage },
   calendar: { label: '📅 AI Calendar', component: CalendarPage },
+  campus: { label: '🏫 Campus 3D', component: CampusPage },
 };
 
 export default function App() {
@@ -60,7 +64,9 @@ export default function App() {
         <button className="small" onClick={logout}>Log out</button>
       </nav>
       <main className="main">
-        <Page />
+        <Suspense fallback={<p className="hint" style={{ padding: 20 }}>Loading…</p>}>
+          <Page />
+        </Suspense>
       </main>
     </div>
   );

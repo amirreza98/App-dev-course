@@ -3,8 +3,8 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  // Always use one copy of React (prevents "Invalid hook call")
-  resolve: { dedupe: ['react', 'react-dom'] },
+  // Always use one copy of React (prevents "Invalid hook call") and of three.js
+  resolve: { dedupe: ['react', 'react-dom', 'three'] },
   // MapLibre loads its web worker relative to its own file; pre-bundling breaks that
   optimizeDeps: { exclude: ['maplibre-gl'] },
   server: {

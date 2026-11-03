@@ -99,3 +99,14 @@ button.ghost { background: transparent; color: #1d3557; border: 1px solid #1d355
 .login-card input { width: 100%; }
 .error { background: #fde2e4; color: #c1121f; padding: 8px 10px; border-radius: 6px; font-size: 13px; margin: 0; }
 .nav-user { margin-left: auto; font-size: 13px; color: #cfd8e3; }
+
+/* Campus 3D page (step 10) */
+.campus-layout { display: flex; height: 100%; }
+.campus-layout .panel { width: 320px; display: flex; flex-direction: column; gap: 10px; }
+.campus-layout h2, .campus-layout h3 { margin: 0; }
+.campus-search { width: 100%; }
+.campus-canvas { flex: 1; background: #dbe7f3; }
+.campus-floors { display: flex; flex-direction: column; gap: 8px; }
+.campus-room { padding: 2px 0 2px 8px; }
+.campus-room.active { font-weight: 700; background: #fff3cd; border-radius: 4px; }
+.campus-views { margin-top: auto; display: flex; flex-wrap: wrap; gap: 6px; }
