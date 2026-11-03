@@ -15,7 +15,9 @@ We build two apps **step by step, with our own hands**: a 🗺️ **3D Map** and
 | [5 · Database](https://github.com/amirreza98/App-dev-course/tree/step-5-database#readme) | `step-5-database` | ~60 min |
 | [6 · Login](https://github.com/amirreza98/App-dev-course/tree/step-6-auth#readme) | `step-6-auth` | ~70 min |
 | [7 · Go live](https://github.com/amirreza98/App-dev-course/tree/step-7-deploy#readme) | `step-7-deploy` | ~75 min |
-| [8 · Mobile app](https://github.com/amirreza98/App-dev-course/tree/step-8-mobile#readme) **📍 you are here** | `step-8-mobile` | ~3 h |
+| [8 · Mobile app](https://github.com/amirreza98/App-dev-course/tree/step-8-mobile#readme) | `step-8-mobile` | ~3 h |
+| [9 · Reminders](https://github.com/amirreza98/App-dev-course/tree/step-9-reminders#readme) **📍 you are here** | `step-9-reminders` | ~60 min |
+| [10 · Campus 3D + VR](https://github.com/amirreza98/App-dev-course/tree/step-10-campus-3d#readme) | `step-10-campus-3d` | ~90 min |
 
 **How it works:** this page is the tutorial for this step. Follow it from top to bottom: create, replace or delete exactly the files it tells you → **save** → look at the browser. **Lesson 0 starts from an empty folder**, and every lesson continues in your own code – reading the lessons in order is all you need. The branch holds the **finished code** of the step, so you can compare or catch up.
 
@@ -37,389 +39,234 @@ Open **http://localhost:5173**. Stop the app with **Control + C**. From step 5 o
 
 ---
 
-# Lesson 8 – The mobile app: your project on your phone
+# Lesson 9 – Reminders: the plan comes to you
 
 | | |
 |---|---|
-| ⏱️ Time | ~2 × 90 min |
-| 🏁 Start from | your code from Lesson 7 – **your app must be live** (Lesson 7, Part T) |
-| ✅ Finished result | branch `step-8-mobile` (folder `mobile/`) |
-| 🎯 You will | build a real iPhone / Android app with **React Native**, using the **same server and database** as your website |
+| ⏱️ Time | ~60 min |
+| 🏁 Start from | your code from Lesson 8 (or `git checkout -f step-8-mobile`) |
+| ✅ Finished result | branch `step-9-reminders` |
+| 🎯 You will | send **notifications** to the phone: every morning *"📚 Today: 2.5h of work"*, and the evening before a deadline *"⏰ Tomorrow: Thesis is due"* |
 
-> 🆘 **Stuck or behind?** Run `git checkout -f step-8-mobile`, then `cd mobile && npm install`, set your link in `mobile/src/config.js` (V1) and start with `npx expo start` (U4).
-
----
-
-## 💡 React → React Native: what changes, what stays
-
-You **don't convert** the website. You build a second frontend that talks to the **same API**:
-
-```
-            ┌── Website (React, client/) ──┐
-Neon ◀── Express API on Vercel ◀──────────┤
-            └── Phone app (React Native, mobile/) ──┘
-```
-
-| Stays the same ✅ | Changes 🔄 |
-|---|---|
-| React: components, `useState`, `useEffect`, props | `<div>` → `<View>`, `<p>`/`<span>` → `<Text>` |
-| The whole server, database, login, planner | `<input>` → `<TextInput>`, `<button>` → `<Pressable>` |
-| `fetch` and our `api()` helper idea | CSS file → `StyleSheet.create({...})` in JavaScript |
-| Date helpers (`dates.js`) | `localStorage` → `SecureStore` (encrypted phone storage) |
-| | MapLibre → `react-native-maps` (Apple Maps / Google Maps, with 3D buildings) |
-
-We use **Expo**: a toolkit that runs your app on your phone **without Xcode or Android Studio**. You install the free **Expo Go** app, scan a QR code – done.
+> 🆘 **Stuck or behind?** Run `git checkout -f step-9-reminders`, then `cd mobile && npm install` and `npx expo start`.
 
 ---
 
-# Part U – Your first app on your phone
+## 💡 Why reminders?
 
-## U1. Install Expo Go on your phone
+Back to the problem from the Planning phase: people who procrastinate **don't open** their calendar. A perfect plan that nobody looks at doesn't help. So the plan has to come **to them** – as a notification on the lock screen.
 
-- iPhone: **App Store** → search **Expo Go** → install
-- Android: **Play Store** → search **Expo Go** → install
+| | Local notification (we use this) | Push notification |
+|---|---|---|
+| Who sends it? | the phone itself, at a time we set | a server, over the internet |
+| Needs a server? | no | yes (+ Apple/Google setup) |
+| Works in Expo Go? | ✅ yes | ❌ not on Android |
+| Good for | reminders at known times | chat messages, news |
 
-## U2. Create the app
+Our plan is known in advance, so **local** notifications are perfect: the app asks the phone *"show this on Tuesday at 8:00"*, and the phone does it – even when the app is closed.
 
-In the **root** folder of the project (next to `client/` and `server/`):
+**The idea:** every time the plan changes, we **delete all scheduled reminders and create new ones** from the plan. Simple, and never out of date.
 
-```bash
-npx create-expo-app@latest mobile --template blank
-```
+---
 
-A new folder **`mobile/`** appears – a complete, separate React Native project with its own `package.json`.
+# Part Z – Reminders
 
-> 💡 `mobile` is **not** added to the root `workspaces`: the phone app uses its own versions of React. Always run its commands **inside** `mobile/`.
+## Z1. Install the notifications library
 
-## U3. Clean up and install the libraries
-
-Delete what we don't need (if they exist): **`mobile/AGENTS.md`**, **`mobile/LICENSE`** and the folder **`mobile/.claude`**.
-
-```bash
-rm -rf mobile/AGENTS.md mobile/LICENSE mobile/.claude
-```
-
-Now install three libraries – **always with `npx expo install`** (it picks versions that fit your Expo version):
+In the root folder of the project:
 
 ```bash
 cd mobile
-npx expo install react-native-maps expo-secure-store react-native-safe-area-context
+npx expo install expo-notifications
 ```
 
-- **react-native-maps** – the map (Apple Maps on iPhone, Google Maps on Android), works in Expo Go
-- **expo-secure-store** – stores the login token encrypted on the phone
-- **react-native-safe-area-context** – keeps our app away from the notch and the home bar
+<details>
+<summary>✅ <b>Checkpoint:</b> your <code>mobile/package.json</code> should now look like this</summary>
 
-Replace **`mobile/app.json`** with (new: the app name):
+Your version numbers may be a little different – that's fine.
 
 ```json
 {
-  "expo": {
-    "name": "App Dev Course",
-    "slug": "app-dev-course",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "ios": {
-      "supportsTablet": true
-    },
-    "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
-    "plugins": [
-      "expo-secure-store"
-    ]
-  }
-}
-```
-
-## U4. 📱 Start it
-
-Still in the `mobile` folder:
-
-```bash
-npx expo start
-```
-
-A **QR code** appears in the terminal.
-
-- **iPhone:** open the **Camera** app → point it at the QR code → tap the banner
-- **Android:** open **Expo Go** → **Scan QR code**
-
-👀 **You see:** *"Open up App.js to start working on your app!"* on your phone. Open **`mobile/App.js`**, change the text, save → the phone updates instantly – just like Vite!
-
-> 📶 Phone and laptop must be on the **same Wi-Fi**. University Wi-Fi often blocks this – then stop with **Control + C** and run `npx expo start --tunnel` (say **yes** if it asks to install something).
-
----
-
-# Part V – Log in with your real account
-
-## V1. ✍️ Where is your server?
-
-Create the folder **`mobile/src`** and in it **`mobile/src/config.js`**:
-
-```js
-// The address of YOUR live server from Lesson 7 – no "/" at the end.
-// The phone talks to the same API, the same login and the same database as the website.
-export const API_URL = 'https://app-dev-course-live.vercel.app';
-```
-
-**Change the link to YOUR live link from Lesson 7.** On the website, the API was on the same address (`/api/...`). A phone app runs on the phone, so it needs the **full** address.
-
-## V2. ✍️ The API helper for the phone
-
-Create **`mobile/src/api.js`**:
-
-```js
-// Same idea as client/src/api.js – but for the phone:
-// - full address (the app does not run on the same server as the API)
-// - the token lives in SecureStore (encrypted phone storage) instead of localStorage
-import * as SecureStore from 'expo-secure-store';
-import { API_URL } from './config';
-
-const TOKEN_KEY = 'token';
-
-export const getToken = () => SecureStore.getItemAsync(TOKEN_KEY);
-
-export const setToken = (token) =>
-  token ? SecureStore.setItemAsync(TOKEN_KEY, token) : SecureStore.deleteItemAsync(TOKEN_KEY);
-
-// App.js tells us what to do when the token is no longer valid
-let onLogout = () => {};
-export const setOnLogout = (fn) => { onLogout = fn; };
-
-export async function api(path, { method = 'GET', body } = {}) {
-  const headers = {};
-  if (body) headers['Content-Type'] = 'application/json';
-
-  const token = await getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  let res;
-  try {
-    res = await fetch(`${API_URL}/api${path}`, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  } catch {
-    throw new Error('No connection to the server. Check your internet and API_URL in src/config.js');
-  }
-
-  // Token expired -> forget it and go back to the login screen
-  if (res.status === 401 && token) {
-    await setToken(null);
-    onLogout();
-  }
-
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `${method} ${path} failed: ${res.status}`);
-  }
-  return res.status === 204 ? null : res.json();
-}
-```
-
-Compare it with `client/src/api.js` – almost the same! Differences:
-
-- `${API_URL}/api${path}` – full address
-- `SecureStore` instead of `localStorage`. Its functions are **async** (they return a Promise), so we use `await`.
-- there is no `window` on a phone, so instead of a `logout` event, `App.js` gives us a function with `setOnLogout`
-- a clear message if the phone has no connection
-
-## V3. ✍️ Shared styles
-
-On the phone there is no CSS file. Styles are JavaScript objects. Create **`mobile/src/theme.js`**:
-
-```js
-// One place for colours and shared styles, so all screens look the same
-import { StyleSheet } from 'react-native';
-
-export const colors = {
-  navy: '#1d3557',
-  bg: '#f6f6f8',
-  card: '#ffffff',
-  text: '#1d1d1f',
-  muted: '#666666',
-  border: '#dddddd',
-  danger: '#c1121f',
-  dangerBg: '#fde2e4',
-  warnBg: '#fff3cd',
-};
-
-export const ui = StyleSheet.create({
-  card: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 12 },
-  title: { fontSize: 22, fontWeight: '700', color: colors.text },
-  label: { fontSize: 12, color: colors.muted, marginBottom: 4 },
-  hint: { fontSize: 13, color: colors.muted },
-  input: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: 8,
-    paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, backgroundColor: '#fff',
+  "name": "mobile",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "expo": "~58.0.22",
+    "expo-notifications": "~58.1.7",
+    "expo-secure-store": "~58.0.2",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-maps": "1.29.11",
+    "react-native-safe-area-context": "~5.10.1"
   },
-  button: { backgroundColor: colors.navy, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  chip: { borderWidth: 1, borderColor: colors.navy, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
-  chipActive: { backgroundColor: colors.navy },
-  chipText: { color: colors.navy, fontWeight: '500' },
-  chipTextActive: { color: '#fff' },
-  error: { backgroundColor: colors.dangerBg, color: colors.danger, padding: 10, borderRadius: 8, overflow: 'hidden' },
-});
-```
-
-- `StyleSheet.create({ ... })` – like CSS classes, but in JavaScript
-- names are **camelCase**: `background-color` → `backgroundColor`, `border-radius` → `borderRadius`
-- numbers have **no unit**: `padding: 14` (not `'14px'`)
-
-## V4. ✍️ The login screen
-
-Create the folder **`mobile/src/screens`** and in it **`mobile/src/screens/LoginScreen.js`**:
-
-```js
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View, StyleSheet } from 'react-native';
-import { api } from '../api';
-import { colors, ui } from '../theme';
-
-export default function LoginScreen({ onLogin }) {
-  const [mode, setMode] = useState('login'); // 'login' or 'register'
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const isLogin = mode === 'login';
-
-  const submit = async () => {
-    setError('');
-    setLoading(true);
-    try {
-      // Same API as the website: POST /api/auth/login or /api/auth/register
-      const data = await api(`/auth/${mode}`, { method: 'POST', body: { email, password } });
-      await onLogin(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={[ui.card, styles.card]}>
-        <Text style={ui.title}>{isLogin ? '👋 Welcome back' : '✨ Create your account'}</Text>
-        <Text style={ui.hint}>3D Map + AI Calendar</Text>
-
-        <View>
-          <Text style={ui.label}>Email</Text>
-          <TextInput
-            style={ui.input}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            placeholder="you@example.com"
-          />
-        </View>
-        <View>
-          <Text style={ui.label}>Password</Text>
-          <TextInput
-            style={ui.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            placeholder="at least 6 characters"
-          />
-        </View>
-
-        {error ? <Text style={ui.error}>{error}</Text> : null}
-
-        <Pressable style={[ui.button, loading && { opacity: 0.6 }]} onPress={submit} disabled={loading}>
-          <Text style={ui.buttonText}>{loading ? 'Please wait…' : isLogin ? 'Log in' : 'Create account'}</Text>
-        </Pressable>
-
-        <Pressable onPress={() => { setMode(isLogin ? 'register' : 'login'); setError(''); }}>
-          <Text style={ui.hint}>
-            {isLogin ? 'No account yet? ' : 'Already have an account? '}
-            <Text style={styles.link}>{isLogin ? 'Create one' : 'Log in'}</Text>
-          </Text>
-        </Pressable>
-      </View>
-    </KeyboardAvoidingView>
-  );
-}
-
-const styles = StyleSheet.create({
-  page: { flex: 1, justifyContent: 'center', padding: 20, backgroundColor: colors.navy },
-  card: { gap: 14, padding: 22 },
-  link: { color: colors.navy, fontWeight: '600', textDecorationLine: 'underline' },
-});
-```
-
-Put it next to `client/src/pages/LoginPage.jsx` – the **logic is identical**. Only the building blocks change:
-
-| Website | Phone |
-|---|---|
-| `<form onSubmit>` | no forms – the button's `onPress` calls `submit` |
-| `<input type="email" onChange={e => setEmail(e.target.value)}>` | `<TextInput keyboardType="email-address" onChangeText={setEmail}>` |
-| `<input type="password">` | `<TextInput secureTextEntry>` |
-| `<button>` | `<Pressable><Text>…</Text></Pressable>` – **all text must be inside `<Text>`** |
-
-`KeyboardAvoidingView` moves the form up when the keyboard opens on iPhone.
-
-## V5. ✍️ App.js: login first, then the tabs
-
-The map and calendar screens come in Parts W and X. For now, create two small placeholders so the app works already.
-
-Create **`mobile/src/screens/MapScreen.js`**:
-
-```js
-import { Text, View } from 'react-native';
-
-export default function MapScreen() {
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>🗺️ The map comes in Part W</Text>
-    </View>
-  );
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "test": "jest"
+  },
+  "private": true,
+  "devDependencies": {
+    "@testing-library/react-native": "^14.1.0",
+    "jest": "^30.5.2",
+    "jest-expo": "~58.0.13",
+    "test-renderer": "^1.3.1",
+    "undici": "^8.12.3"
+  },
+  "jest": {
+    "preset": "jest-expo"
+  }
 }
 ```
+</details>
 
-Create **`mobile/src/screens/CalendarScreen.js`**:
+## Z2. ✍️ The reminders module
+
+Create **`mobile/src/reminders.js`**:
 
 ```js
-import { Text, View } from 'react-native';
+// Daily reminders on the phone – the plan comes to the student, not the other way round.
+// These are LOCAL notifications: the phone schedules them itself, no server needed.
+import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import * as SecureStore from 'expo-secure-store';
+import { addDays, fromYMD, toYMD } from './utils/dates';
 
-export default function CalendarScreen() {
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>📅 The calendar comes in Part X</Text>
-    </View>
-  );
+const SETTINGS_KEY = 'reminders';
+export const DEFAULT_SETTINGS = { enabled: false, hour: 8 };
+const DEADLINE_HOUR = 18; // "due tomorrow" reminders come in the evening
+const DAYS_AHEAD = 7;     // schedule one week in advance
+
+// ---- Settings (saved on the phone) ----
+export async function loadSettings() {
+  const saved = await SecureStore.getItemAsync(SETTINGS_KEY);
+  return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
 }
+
+export const saveSettings = (settings) => SecureStore.setItemAsync(SETTINGS_KEY, JSON.stringify(settings));
+
+// ---- Which reminders should exist? A pure function: plan in, list out (easy to test) ----
+export function buildReminders(plan, tasks, { hour = 8, now = new Date(), days = DAYS_AHEAD } = {}) {
+  const reminders = [];
+  const today = toYMD(now);
+  const lastDay = addDays(today, days - 1);
+
+  // 1. Every morning with work: "📚 Today: 2.5h of work"
+  for (let i = 0; i < days; i++) {
+    const day = addDays(today, i);
+    const sessions = plan.days[day] || [];
+    if (!sessions.length) continue;
+
+    const at = fromYMD(day);
+    at.setHours(hour, 0, 0, 0);
+    if (at <= now) continue; // this morning is already over
+
+    // Add up the hours per task: "Thesis 1.5h · Exam prep 1h"
+    const perTask = {};
+    for (const s of sessions) perTask[s.title] = (perTask[s.title] || 0) + s.hours;
+    const total = Object.values(perTask).reduce((a, b) => a + b, 0);
+
+    reminders.push({
+      id: `work-${day}`,
+      date: at,
+      title: `📚 Today: ${total}h of work`,
+      body: Object.entries(perTask).map(([title, h]) => `${title} ${h}h`).join(' · '),
+    });
+  }
+
+  // 2. The evening before a deadline: "⏰ Tomorrow: Thesis is due"
+  for (const task of tasks) {
+    if (task.done) continue;
+    const day = addDays(task.deadline, -1);
+    const at = fromYMD(day);
+    at.setHours(DEADLINE_HOUR, 0, 0, 0);
+    if (at <= now || day > lastDay) continue;
+    reminders.push({
+      id: `due-${task.id}`,
+      date: at,
+      title: `⏰ Tomorrow: ${task.title} is due`,
+      body: 'Last evening to finish it. You can do this! 💪',
+    });
+  }
+
+  return reminders.sort((a, b) => a.date - b.date);
+}
+
+// ---- Talk to the phone ----
+export async function askPermission() {
+  // Android needs a "channel" for notifications (and shows the permission popup only after one exists)
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('reminders', {
+      name: 'Reminders',
+      importance: Notifications.AndroidImportance.HIGH,
+    });
+  }
+  const { granted } = await Notifications.requestPermissionsAsync();
+  return granted;
+}
+
+// Delete all old reminders and schedule the new ones. Returns how many were scheduled.
+export async function syncReminders(plan, tasks, settings) {
+  await Notifications.cancelAllScheduledNotificationsAsync();
+  if (!settings.enabled) return 0;
+
+  const reminders = buildReminders(plan, tasks, { hour: settings.hour });
+  for (const r of reminders) {
+    await Notifications.scheduleNotificationAsync({
+      content: { title: r.title, body: r.body },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: r.date, channelId: 'reminders' },
+    });
+  }
+  return reminders.length;
+}
+
+// Show one right now – perfect for testing
+export const sendTestReminder = () =>
+  Notifications.scheduleNotificationAsync({
+    content: { title: '📚 Reminders work!', body: 'You will get your plan every morning.' },
+    trigger: null, // null = now
+  });
 ```
 
-Replace **`mobile/App.js`** with:
+It has three parts:
+
+1. **Settings** (on/off, which hour) – saved on the phone with SecureStore, as JSON text
+2. **`buildReminders(plan, tasks)`** – a **pure function**: it only calculates the list of reminders, it doesn't touch the phone. Pure functions are easy to test (Z5).
+   - every day with work sessions → one reminder at 8:00 with the hours added up per task
+   - every open task → one reminder at 18:00 the evening before its deadline
+   - only the next 7 days, nothing in the past, sorted by time
+3. **Talking to the phone**
+   - `askPermission()` – the phone asks the user *"Allow notifications?"*. Android also needs a **channel** (a category of notifications the user can turn off in Settings).
+   - `syncReminders()` – `cancelAllScheduledNotificationsAsync()`, then `scheduleNotificationAsync()` for each reminder, with a **DATE trigger** (*"show it at this date"*)
+   - `sendTestReminder()` – `trigger: null` means *"now"*
+
+## Z3. ✍️ Show reminders while the app is open
+
+By default, the phone doesn't show a banner while you are **inside** the app. Replace **`mobile/App.js`** with (new: the `Notifications.setNotificationHandler(...)` block at the top):
 
 ```js
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
 import { api, getToken, setOnLogout, setToken } from './src/api';
 import LoginScreen from './src/screens/LoginScreen';
 import MapScreen from './src/screens/MapScreen';
 import CalendarScreen from './src/screens/CalendarScreen';
 import { colors } from './src/theme';
+
+// Show reminders as a banner even while the app is open
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 const TABS = {
   map: { label: '🗺️ 3D Map', component: MapScreen },
@@ -500,197 +347,21 @@ const styles = StyleSheet.create({
 });
 ```
 
-The same ideas as `client/src/App.jsx`: `user` state, check the saved token on start (`/auth/me`), `login` / `logout`, and a `TABS` object – this time as a **tab bar at the bottom**, like real apps.
-
-**📱 Test it:** the phone shows the login screen. Log in with **the same email and password as on your website**. 🎉 Your email appears at the top. Close Expo Go and open the app again → still logged in (SecureStore).
-
----
-
-# Part W – The 3D map
-
-## W1. ✍️ Map screen
-
-Replace **`mobile/src/screens/MapScreen.js`** with:
-
-```js
-import { useEffect, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
-import { api } from '../api';
-import { colors, ui } from '../theme';
-
-const CITIES = {
-  Berlin: { latitude: 52.5163, longitude: 13.3777 },
-  Cologne: { latitude: 50.9413, longitude: 6.9583 },
-  'New York': { latitude: 40.7484, longitude: -73.9857 },
-  Tokyo: { latitude: 35.6812, longitude: 139.7671 },
-};
-
-// A tilted camera = 3D look (pitch tilts it, heading turns it)
-const camera = (center) => ({ center, pitch: 60, heading: -20, altitude: 600, zoom: 17 });
-
-export default function MapScreen() {
-  const mapRef = useRef(null);
-  const [places, setPlaces] = useState([]);
-  const [pending, setPending] = useState(null); // coordinate of a new place, while we ask for its name
-  const [name, setName] = useState('');
-
-  // Load my saved places once
-  useEffect(() => {
-    api('/places').then(setPlaces).catch((err) => Alert.alert('Error', err.message));
-  }, []);
-
-  const flyTo = (center) => mapRef.current?.animateCamera(camera(center), { duration: 1500 });
-
-  // Long press on the map -> ask for a name
-  const startAdd = (e) => {
-    setPending(e.nativeEvent.coordinate);
-    setName('');
-  };
-
-  const savePlace = async () => {
-    if (!name.trim()) return;
-    try {
-      const place = await api('/places', {
-        method: 'POST',
-        body: { name: name.trim(), lat: pending.latitude, lng: pending.longitude },
-      });
-      setPlaces((prev) => [...prev, place]);
-      setPending(null);
-    } catch (err) {
-      Alert.alert('Error', err.message);
-    }
-  };
-
-  const removePlace = (place) => {
-    Alert.alert('Delete place?', place.name, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await api(`/places/${place.id}`, { method: 'DELETE' });
-          setPlaces((prev) => prev.filter((p) => p.id !== place.id));
-        },
-      },
-    ]);
-  };
-
-  return (
-    <View style={styles.page}>
-      <MapView
-        ref={mapRef}
-        style={StyleSheet.absoluteFill}
-        initialCamera={camera(CITIES.Berlin)}
-        showsBuildings
-        pitchEnabled
-        rotateEnabled
-        onLongPress={startAdd}
-      >
-        {places.map((p) => (
-          <Marker key={p.id} coordinate={{ latitude: p.lat, longitude: p.lng }} title={p.name} />
-        ))}
-      </MapView>
-
-      {/* City buttons on top of the map */}
-      <ScrollView horizontal style={styles.topBar} contentContainerStyle={styles.row} showsHorizontalScrollIndicator={false}>
-        {Object.entries(CITIES).map(([city, center]) => (
-          <Pressable key={city} style={styles.pill} onPress={() => flyTo(center)}>
-            <Text style={styles.pillText}>{city}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      {/* My places at the bottom: tap = fly there, long press = delete */}
-      <View style={styles.bottomBar}>
-        <Text style={ui.hint}>
-          {places.length ? 'My places (tap = go, hold = delete)' : 'Hold your finger on the map to save a place'}
-        </Text>
-        <ScrollView horizontal contentContainerStyle={styles.row} showsHorizontalScrollIndicator={false}>
-          {places.map((p) => (
-            <Pressable
-              key={p.id}
-              style={ui.chip}
-              onPress={() => flyTo({ latitude: p.lat, longitude: p.lng })}
-              onLongPress={() => removePlace(p)}
-            >
-              <Text style={ui.chipText}>📍 {p.name}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Small dialog for the name of a new place */}
-      <Modal visible={!!pending} transparent animationType="fade" onRequestClose={() => setPending(null)}>
-        <View style={styles.backdrop}>
-          <View style={[ui.card, { gap: 12 }]}>
-            <Text style={ui.title}>New place</Text>
-            <TextInput style={ui.input} value={name} onChangeText={setName} placeholder="e.g. SRH Campus" autoFocus />
-            <Pressable style={ui.button} onPress={savePlace}>
-              <Text style={ui.buttonText}>Save</Text>
-            </Pressable>
-            <Pressable onPress={() => setPending(null)}>
-              <Text style={[ui.hint, { textAlign: 'center' }]}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  page: { flex: 1 },
-  topBar: { position: 'absolute', top: 10, left: 0, right: 0, flexGrow: 0 },
-  row: { gap: 8, paddingHorizontal: 12, alignItems: 'center' },
-  pill: { backgroundColor: colors.navy, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
-  pillText: { color: '#fff', fontWeight: '600' },
-  bottomBar: {
-    position: 'absolute', bottom: 10, left: 10, right: 10,
-    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 12, paddingVertical: 10, gap: 8,
-    paddingLeft: 12,
-  },
-  backdrop: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,0.4)' },
-});
-```
-
-- **`<MapView>`** draws Apple Maps (iPhone) or Google Maps (Android)
-- **`camera`**: `pitch: 60` tilts the view, `heading` turns it, `showsBuildings` → **3D buildings**
-- **`animateCamera`** flies smoothly to a city – the same idea as `map.flyTo` on the website
-- **`onLongPress`** – hold your finger on the map → a **`Modal`** (small window) asks for the name → `POST /api/places`
-- **`<Marker>`** – one pin per saved place
-- `StyleSheet.absoluteFill` – the map fills the whole screen; the buttons float on top (`position: 'absolute'`)
-
-**📱 Test it:** **3D Map** tab → you see your places from the website (e.g. Brandenburg Gate). Tap **Tokyo** → the camera flies there. Tilt with two fingers. Hold your finger on a building → name it → it appears on the **website** too (refresh it)!
-
----
-
-# Part X – The calendar
-
-## X1. ✍️ Copy the date helpers
-
-The date helpers are plain JavaScript – they work on the phone unchanged. Create the folder **`mobile/src/utils`** and copy the file:
-
-```bash
-mkdir -p src/utils
-cp ../client/src/utils/dates.js src/utils/dates.js
-```
-
-*(Run this inside `mobile/`. On Windows without Git Bash: copy `client/src/utils/dates.js` to `mobile/src/utils/dates.js` in VS Code.)*
-
-## X2. ✍️ Calendar screen
+## Z4. ✍️ The switch on the calendar screen
 
 Replace **`mobile/src/screens/CalendarScreen.js`** with:
 
 ```js
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { api } from '../api';
 import { addDays, formatLong, relative, todayYMD } from '../utils/dates';
+import { askPermission, loadSettings, saveSettings, sendTestReminder, syncReminders } from '../reminders';
 import { colors, ui } from '../theme';
 
 const PRIORITIES = ['low', 'medium', 'high'];
 const QUICK_DEADLINES = [3, 7, 14, 30]; // "in X days" buttons instead of a date picker
+const REMINDER_HOURS = [7, 8, 9, 10];
 
 const emptyForm = () => ({ title: '', hours: '3', deadline: addDays(todayYMD(), 7), priority: 'medium' });
 
@@ -699,6 +370,8 @@ export default function CalendarScreen() {
   const [plan, setPlan] = useState({ days: {}, atRisk: [] });
   const [form, setForm] = useState(emptyForm);
   const [refreshing, setRefreshing] = useState(false);
+  const [reminders, setReminders] = useState(null); // settings, e.g. { enabled: true, hour: 8 }
+  const [scheduled, setScheduled] = useState(0);    // how many reminders are waiting
 
   // Load tasks + plan from the same API as the website
   const load = useCallback(async () => {
@@ -713,6 +386,26 @@ export default function CalendarScreen() {
   useEffect(() => {
     load().catch((err) => Alert.alert('Error', err.message));
   }, [load]);
+
+  // Reminders: load the saved settings once ...
+  useEffect(() => {
+    loadSettings().then(setReminders);
+  }, []);
+
+  // ... and re-schedule them whenever the plan or the settings change
+  useEffect(() => {
+    if (!reminders) return;
+    syncReminders(plan, tasks, reminders).then(setScheduled).catch(console.warn);
+  }, [plan, tasks, reminders]);
+
+  const updateReminders = async (changes) => {
+    const next = { ...reminders, ...changes };
+    if (changes.enabled && !(await askPermission())) {
+      return Alert.alert('Notifications are off', 'Allow notifications for Expo Go in your phone settings.');
+    }
+    setReminders(next);
+    await saveSettings(next);
+  };
 
   const refresh = async () => {
     setRefreshing(true);
@@ -803,6 +496,36 @@ export default function CalendarScreen() {
         </Pressable>
       </View>
 
+      {/* ---- Reminders ---- */}
+      {reminders && (
+        <View style={[ui.card, { gap: 10 }]}>
+          <View style={styles.row}>
+            <Text style={{ flex: 1, fontWeight: '600', fontSize: 16 }}>🔔 Daily reminders</Text>
+            <Switch
+              accessibilityLabel="Daily reminders"
+              value={reminders.enabled}
+              onValueChange={(enabled) => updateReminders({ enabled })}
+            />
+          </View>
+          {reminders.enabled && (
+            <>
+              <View style={styles.row}>
+                <Text style={ui.label}>Every morning at</Text>
+                {REMINDER_HOURS.map((h) => (
+                  <Pressable key={h} style={[ui.chip, reminders.hour === h && ui.chipActive]} onPress={() => updateReminders({ hour: h })}>
+                    <Text style={[ui.chipText, reminders.hour === h && ui.chipTextActive]}>{h}:00</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={ui.hint}>{scheduled} reminders planned for the next 7 days</Text>
+              <Pressable onPress={sendTestReminder}>
+                <Text style={[ui.chipText, { textDecorationLine: 'underline' }]}>Send a test reminder now</Text>
+              </Pressable>
+            </>
+          )}
+        </View>
+      )}
+
       {/* ---- At-risk warning ---- */}
       {plan.atRisk.length > 0 && (
         <View style={[ui.card, { backgroundColor: colors.warnBg }]}>
@@ -864,79 +587,81 @@ const styles = StyleSheet.create({
 });
 ```
 
-A month grid is too small for a phone, so we show an **agenda**: the next days, each with its work sessions 📖 and deadlines 🏁.
+What's new:
 
-- the **plan comes from the same server**: `POST /api/tasks/plan` – we didn't write the planner again!
-- **"3 / 7 / 14 / 30 days"** buttons instead of a date picker – faster to tap on a phone
-- `RefreshControl` – **pull down** to reload (like in every app)
-- after every change we call `load()` again, so the plan updates
+- two states: `reminders` (the settings) and `scheduled` (how many are waiting)
+- **a second `useEffect` with `[plan, tasks, reminders]`**: whenever the plan, the tasks or the settings change, we sync the reminders again. You add a task → new plan → new reminders, automatically.
+- `updateReminders` – turning the switch **on** first asks for permission
+- a new card: **🔔 Daily reminders** with a `<Switch>`, the hour (7–10), the count, and a **test** link
 
-**📱 Test it:** **Calendar** tab → your tasks from the website are here. Add *"Read paper"*, 4h, 7 days → it appears in the plan, split into sessions. Tick a task as done → the website shows it as done too. **One database, two apps.** 🎉
+**📱 Test it:**
 
----
+1. **Calendar** tab → turn on **🔔 Daily reminders** → allow notifications.
+2. You see *"5 reminders planned for the next 7 days"* (your number depends on your tasks).
+3. Tap **Send a test reminder now** → a banner appears at the top. 🎉
+4. Add a task due in 3 days → the number goes up.
+5. Tomorrow morning at 8:00, check your lock screen. 😉
 
-# Part Y – Test the phone app automatically
 
-You can't tap through the app after every change. Tests can – without a phone.
+## Z5. ✍️ Test the rules
 
-## Y1. Install the test tools
+Create **`mobile/__tests__/reminders.test.js`**:
 
-Inside `mobile/`:
+```js
+// Unit tests for buildReminders – no phone, no server needed.
+import { buildReminders } from '../src/reminders';
 
-```bash
-npm install --save-dev jest-expo jest @testing-library/react-native test-renderer undici
+jest.mock('expo-notifications', () => ({}));
+jest.mock('expo-secure-store', () => ({}));
+
+// "Now" = Monday 2 Nov 2026, 07:00 in the morning
+const NOW = new Date(2026, 10, 2, 7, 0);
+
+const plan = {
+  days: {
+    '2026-11-02': [{ taskId: 1, title: 'Thesis', hours: 1.5 }, { taskId: 2, title: 'Exam prep', hours: 1 }],
+    '2026-11-03': [{ taskId: 1, title: 'Thesis', hours: 1 }, { taskId: 1, title: 'Thesis', hours: 1 }],
+    '2026-11-20': [{ taskId: 3, title: 'Far away', hours: 1 }],
+  },
+};
+const tasks = [
+  { id: 1, title: 'Thesis', deadline: '2026-11-05', done: false },
+  { id: 2, title: 'Exam prep', deadline: '2026-11-04', done: true },
+];
+
+test('one morning reminder per day with work, with the hours added up', () => {
+  const list = buildReminders(plan, tasks, { hour: 8, now: NOW });
+  const work = list.filter((r) => r.id.startsWith('work-'));
+  expect(work.map((r) => r.id)).toEqual(['work-2026-11-02', 'work-2026-11-03']);
+  expect(work[0].title).toBe('📚 Today: 2.5h of work');
+  expect(work[0].body).toBe('Thesis 1.5h · Exam prep 1h');
+  expect(work[1].body).toBe('Thesis 2h'); // two sessions of the same task -> added up
+  expect(work[0].date.getHours()).toBe(8);
+});
+
+test('no reminder for a time that is already over', () => {
+  const list = buildReminders(plan, tasks, { hour: 6, now: NOW }); // 6:00 < 7:00
+  expect(list.some((r) => r.id === 'work-2026-11-02')).toBe(false);
+});
+
+test('reminder the evening before a deadline, but not for done tasks', () => {
+  const list = buildReminders(plan, tasks, { now: NOW });
+  const due = list.filter((r) => r.id.startsWith('due-'));
+  expect(due.map((r) => r.id)).toEqual(['due-1']);           // task 2 is done
+  expect(due[0].date).toEqual(new Date(2026, 10, 4, 18, 0)); // day before, 18:00
+});
+
+test('only the next 7 days, sorted by time', () => {
+  const list = buildReminders(plan, tasks, { now: NOW });
+  expect(list.some((r) => r.id === 'work-2026-11-20')).toBe(false);
+  const times = list.map((r) => r.date.getTime());
+  expect(times).toEqual([...times].sort((a, b) => a - b));
+});
 ```
 
-- **jest-expo** – runs React Native code on your laptop
-- **@testing-library/react-native** – *"find the button with this text, press it"*
-- **undici** – a real `fetch`, so the tests talk to your real server
+We pass a fixed **`now`** (Monday 7:00), so the test gives the same result on every day of the year.
 
-Open **`mobile/package.json`** and add two things: the line `"test": "jest"` inside `"scripts"`, and a new block `"jest": { "preset": "jest-expo" }` at the end.
-
-<details>
-<summary>✅ <b>Checkpoint:</b> your <code>mobile/package.json</code> should now look like this</summary>
-
-Your version numbers may be a little different – that's fine.
-
-```json
-{
-  "name": "mobile",
-  "version": "1.0.0",
-  "main": "index.js",
-  "dependencies": {
-    "expo": "~58.0.22",
-    "expo-secure-store": "~58.0.2",
-    "expo-status-bar": "~58.0.4",
-    "react": "19.3.0",
-    "react-native": "0.88.1",
-    "react-native-maps": "1.29.11",
-    "react-native-safe-area-context": "~5.10.1"
-  },
-  "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
-    "test": "jest"
-  },
-  "private": true,
-  "devDependencies": {
-    "@testing-library/react-native": "^14.1.0",
-    "jest": "^30.5.2",
-    "jest-expo": "~58.0.13",
-    "test-renderer": "^1.3.1",
-    "undici": "^8.12.3"
-  },
-  "jest": {
-    "preset": "jest-expo"
-  }
-}
-```
-</details>
-
-## Y2. ✍️ The screen test
-
-Create the folder **`mobile/__tests__`** and in it **`mobile/__tests__/app.test.js`**:
+Replace **`mobile/__tests__/app.test.js`** with (new: a fake `expo-notifications` that remembers what was scheduled, and step 4 that turns on the switch):
 
 ```js
 // Screen tests: render the real App and use it like a user would.
@@ -963,6 +688,18 @@ jest.mock('expo-secure-store', () => {
     deleteItemAsync: async (k) => { delete store[k]; },
   };
 });
+
+// Notifications need a real phone – remember what the app schedules
+const mockScheduled = [];
+jest.mock('expo-notifications', () => ({
+  setNotificationHandler: jest.fn(),
+  setNotificationChannelAsync: jest.fn(),
+  requestPermissionsAsync: async () => ({ granted: true }),
+  cancelAllScheduledNotificationsAsync: async () => { mockScheduled.length = 0; },
+  scheduleNotificationAsync: async (request) => { mockScheduled.push(request); },
+  AndroidImportance: { HIGH: 4 },
+  SchedulableTriggerInputTypes: { DATE: 'date' },
+}));
 
 // Safe-area sizes come from the phone – use the library's test version
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
@@ -1008,7 +745,13 @@ test('register, see the 3D map with the welcome place, add a task', async () => 
   await waitFor(() => expect(screen.getAllByText(/Phone task/).length).toBeGreaterThan(1));
   expect(screen.getAllByText('📖 Phone task').length).toBeGreaterThan(0); // work sessions
 
-  // 4. Log out -> back to the login screen
+  // 4. Turn on reminders -> the phone gets one notification per working day (+ deadline eve)
+  await fireEvent(screen.getByLabelText('Daily reminders'), 'valueChange', true);
+  expect(await screen.findByText(/reminders planned for the next 7 days/)).toBeTruthy();
+  await waitFor(() => expect(mockScheduled.length).toBeGreaterThan(0));
+  expect(mockScheduled[0].content.title).toMatch(/Today: .*h of work/);
+
+  // 5. Log out -> back to the login screen
   await fireEvent.press(screen.getByText('Log out'));
   expect(await screen.findByText('👋 Welcome back')).toBeTruthy();
 });
@@ -1022,133 +765,46 @@ test('wrong password shows the server message', async () => {
 });
 ```
 
-- **`jest.mock(...)`** replaces things that only exist on a real phone (SecureStore, the map, screen insets) with simple fakes
-- the test **renders the real `App`**, types an email, presses *Create account*, checks the map and the calendar – like a user
-- it talks to your **local** server (`localhost:3001`), not the live one, so test accounts don't end up in your real database
-
-## Y3. Run it
-
-Terminal 1, in the **root** folder: `npm run dev` (starts the local server). Terminal 2:
+Run (local server running in another terminal: `npm run dev` in the root folder):
 
 ```bash
-cd mobile
 npm test
 ```
 
-👀 **You see:** `Tests: 2 passed`. *(Yellow "act(...)" warnings are normal here.)*
-
-## Y4. ✍️ GitHub runs the phone tests too
-
-Replace **`.github/workflows/ci.yml`** (root folder) with:
-
-```yaml
-# Runs automatically on GitHub every time someone pushes code.
-# Green check = the app builds and all tests pass. Red cross = something broke.
-name: CI
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-
-    # A throw-away PostgreSQL database just for the tests
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: course
-          POSTGRES_PASSWORD: course
-          POSTGRES_DB: appdev
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
-
-    env:
-      DATABASE_URL: postgresql://course:course@localhost:5432/appdev
-      JWT_SECRET: ci-test-secret
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci           # install exactly the versions in package-lock.json
-      - run: npm run build    # does the frontend build?
-      - run: npm test         # planner + API tests
-
-      # Mobile app: start the API in the background, then test the phone screens against it
-      - name: Mobile app tests
-        run: |
-          npm start -w server &
-          for i in $(seq 1 30); do curl -sf localhost:3001/api/health && break; sleep 1; done
-          cd mobile
-          npm ci
-          npm test
-```
-
-New last step: start the API in the background, then install and test the mobile app.
-
-Create **`.vercelignore`** in the **root** folder, so Vercel doesn't upload the phone app with the website:
-
-```
-# The phone app is not part of the website deployment
-mobile
-```
-
-Back in the **root** folder, save and push everything:
-
-```bash
-cd ..
-git add .
-git commit -m "Lesson 8: mobile app"
-git push
-```
-
-GitHub → **Actions** → green ✅ for the website **and** the phone app.
+👀 **You see:** `Tests: 6 passed`.
 
 ---
 
-# 🎉 You built a mobile app!
-
-| | Website | Phone app |
-|---|---|---|
-| Folder | `client/` | `mobile/` |
-| Built with | React + Vite | React Native + Expo |
-| Runs in | the browser | Expo Go (later: App Store / Play Store) |
-| Server, database, login, planner | **shared** | **shared** |
+# 🎉 Your app reminds you!
 
 ## 🛠️ Troubleshooting
 
 | You see | Fix |
 |---|---|
-| QR code scanned, but *"Could not connect to development server"* | same Wi-Fi? Otherwise `npx expo start --tunnel` |
-| *"No connection to the server"* | wrong link in `src/config.js` – open `<your link>/api/health` on the phone's browser |
-| *"Server is not configured…"* | your live server misses a variable – Lesson 7, T7 |
-| *"Wrong email or password"* but it works on the website | check the email for a capital letter / space at the end |
-| Red error screen in the app | read the first line – it names the file and line. Fix, save, the app reloads |
-| `npm test`: *"Start the server first"* | run `npm run dev` in the root folder in another terminal |
+| No permission popup on Android | Android shows it only once – check **Settings → Apps → Expo Go → Notifications** |
+| Switch turns off again with *"Notifications are off"* | you said *Don't allow* – allow notifications for **Expo Go** in your phone settings |
+| Test reminder works, morning reminder doesn't come | iPhone *Focus / Do Not Disturb*? Android battery saver can delay reminders by a few minutes |
+| `0 reminders planned` | no work sessions in the next 7 days – add a task |
 
 ## 💪 Bonus exercises
 
-**A.** Show a small "👋 Hi, *name*" on the calendar screen. *(Hint: pass `user` from `App.js` as a prop.)*
+**A.** Add the evening hour to the settings (`DEADLINE_HOUR`), with chips like the morning hour.
 
-**B.** Add a third tab **"Profile"** with your email and the log-out button. *(Hint: one more entry in `TABS`.)*
+**B.** No reminders at the weekend: in `buildReminders`, skip days where `fromYMD(day).getDay()` is `0` (Sunday) or `6` (Saturday).
 
-**C.** Use the phone's location: `npx expo install expo-location`, then add `showsUserLocation` to `<MapView>`.
-
-**D.** Put the app on your phone **without** Expo Go: look up **EAS Build** (`npx eas-cli build --profile preview`).
+**C.** Tapping the reminder should open the **Calendar** tab. *(Hint: `Notifications.addNotificationResponseReceivedListener` in `App.js` → `setTab('calendar')`.)*
 
 ## 📖 Words you learned
 
 | Word | Meaning |
 |---|---|
-| **React Native** | React for iPhone and Android apps – real native screens, not a website |
-| **Expo / Expo Go** | tools to build and run React Native apps without Xcode or Android Studio |
-| **`View` / `Text` / `Pressable` / `TextInput`** | the phone's versions of `div`, `p`, `button`, `input` |
-| **`StyleSheet`** | styles as JavaScript objects (camelCase, no units) |
-| **SecureStore** | encrypted storage on the phone (for the token) |
-| **Modal** | a small window on top of the screen |
-| **Mock** | a fake replacement used in tests |
-| **Hot reload** | save a file → the phone updates instantly |
+| **Local notification** | a message the phone shows at a time the app scheduled |
+| **Push notification** | a message a server sends to the phone over the internet |
+| **Trigger** | *when* a notification appears (`DATE` = at a date, `null` = now) |
+| **Permission** | the user must allow notifications once |
+| **Notification channel** | Android's category for notifications (user can turn each one off) |
+| **Pure function** | only calculates a result from its inputs, changes nothing – easy to test |
+
+---
+
+➡️ **Next:** [Lesson 10 – Campus 3D](10-campus-3d.md): walk through your campus in 3D, and in VR.
